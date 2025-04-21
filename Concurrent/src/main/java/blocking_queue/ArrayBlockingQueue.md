@@ -16,7 +16,7 @@
 ```Java
 if (size == capacity) {
     throw new IllegalStateException("Queue full."); // add
-    //或者
+    // 或者
     return false; // offer 
 }
 ```
@@ -30,7 +30,7 @@ if (size == 0) {
 
 ## 为什么要使用循环数组？
 因为我们想构建一个固定容量的队列，且它能够同时保持：
-* 内存占用恒定（避免频繁扩容或拷贝数组移动元素
+* 内存占用恒定（避免频繁扩容或拷贝数组移动元素）
 * 高效的入队与出队操作（$O(1)时间复杂度$）
 
 我们可以维护两个指针：`head`和`tail`，同时维护`size`变量， 做到正确判断阻塞与释放条件。
