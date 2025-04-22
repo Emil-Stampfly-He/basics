@@ -1,4 +1,7 @@
 # 从零开始的`ConcurrentHashMap`
+
+**Github: https://github.com/Emil-Stampfly-He/basics**
+
 `ConcurrentHashMap`是线程安全版本的`HashMap`，其读操作不需要加锁，
 而写操作则需要加锁来保证线程安全。这是因为，即使多线程并发地读取同一个key，
 它们也不会修改数据结构，因此无锁访问时可能的。而对于写操作，多个线程同时进行

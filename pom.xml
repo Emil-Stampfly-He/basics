@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>Concurrent</module>
+        <module>Frameworks</module>
     </modules>
 
     <dependencies>
