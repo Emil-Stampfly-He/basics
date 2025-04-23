@@ -9,8 +9,9 @@
 4. 线程池的安全关闭
    1. 线程池的正常关闭
    2. 线程池的强制关闭
-   3. `awaitTermination`
+   3. 线程池的等待
 5. 提供`submit`方法返回`Future`，即`Callable` + `Future`
+6. `ListBlockinhQueue`vs`ArrayBlockingQueue`
 
 ## 1. 拥有固定数量工作的线程 + 任务队列
 一个最小化的线程池必须包含三个功能：接受任务、缓存队列，以及派发给工作线程。
@@ -1166,7 +1167,7 @@ class TestMyThreadPool {
 22:08:19.895 [non-core-worker-4] INFO thread_pool.MyThreadPoolExecutor -- Thread pool has been fully terminated.
 ```
 ### 4.2. 线程池的强制关闭
-这一小姐中我们讨论`shutdownNow`方法。实际上这个方法非常简单：在将`isShutdown`更改为`true`后，直接将任务队列“清理干净”。这样线程就会因为没有任务可以处理而直接退出。
+这一小节中我们讨论`shutdownNow`方法。实际上这个方法非常简单：在将`isShutdown`更改为`true`后，直接将任务队列“清理干净”。这样线程就会因为没有任务可以处理而直接退出。
 当然，我们可以留一手，将任务队列清理出来的任务返回给调用者，使得调用者能够视情况处理这些剩下的任务。我们用一个`List`存储这些清理出来的任务：
 ```Java
 public List<Runnable> shutdownNow() {
@@ -1192,4 +1193,304 @@ public List<Runnable> shutdownNow() {
 ```
 可以看到，在shut down后，所有线程立马开始退出，然后终止。
 
-### 4.3. `awaitTermination`
+### 4.3. 线程池的等待
+到目前为止，我们已经将线程池终止的两种方式全部实现完毕了。打开官方源码，却看到`shutdown`方法上有这么一段注释:
+```aiignore
+/**
+ * Initiates an orderly shutdown in which previously submitted
+ * tasks are executed, but no new tasks will be accepted.
+ * Invocation has no additional effect if already shut down.
+ *
+ * This method does not wait for previously submitted tasks to
+ * complete execution. Use awaitTermination to do that.
+ */
+```
+这段注释说明了`shutdown`的工作细节——这一点我们已经知道了。然而在第二段，注释提到了`shutdown`的限制与另一个方法：`awaitTermination`。
+虽然`shutdown`方法能够启动线程池的关闭过程，停止接收新的任务，并且执行已提交的任务，但是它并不会**阻塞等待**这些任务的完成。
+
+这是什么意思呢？我们修改一下我们的测试类：在非强制关闭线程池后，对一个数字进行100次的加1操作：
+```Java
+pool.shutdown();
+
+int i = 0;
+for (int j = 0; j < 100; j++) {
+    log.info("i = {}", i);
+    i++;
+}
+```
+输出如下:
+```aiignore
+23:36:42.851 [main] INFO thread_pool.MyThreadPoolExecutor -- Thread pool shutting down...
+23:36:42.851 [main] INFO thread_pool.TestMyThreadPool -- i = 0
+23:36:42.851 [main] INFO thread_pool.TestMyThreadPool -- i = 1
+23:36:42.853 [main] INFO thread_pool.TestMyThreadPool -- i = 2
+23:36:42.854 [main] INFO thread_pool.TestMyThreadPool -- i = 3
+23:36:42.854 [main] INFO thread_pool.TestMyThreadPool -- i = 4
+23:36:42.854 [main] INFO thread_pool.TestMyThreadPool -- i = 5
+23:36:42.854 [main] INFO thread_pool.TestMyThreadPool -- i = 6
+...
+23:36:42.868 [main] INFO thread_pool.TestMyThreadPool -- i = 97
+23:36:42.868 [main] INFO thread_pool.TestMyThreadPool -- i = 98
+23:36:42.868 [main] INFO thread_pool.TestMyThreadPool -- i = 99
+23:36:43.013 [non-core-worker-2] INFO thread_pool.TestMyThreadPool -- non-core-worker-2 executing task 34
+23:36:43.218 [non-core-worker-3] INFO thread_pool.TestMyThreadPool -- non-core-worker-3 executing task 35
+23:36:43.434 [core-worker-0] INFO thread_pool.TestMyThreadPool -- core-worker-0 executing task 36
+23:36:43.434 [non-core-worker-4] INFO thread_pool.TestMyThreadPool -- non-core-worker-4 executing task 37
+23:36:43.501 [core-worker-1] INFO thread_pool.TestMyThreadPool -- core-worker-1 executing task 38
+23:36:44.015 [non-core-worker-2] INFO thread_pool.TestMyThreadPool -- non-core-worker-2 executing task 39
+23:36:44.242 [non-core-worker-3] INFO thread_pool.TestMyThreadPool -- non-core-worker-3 executing task 40
+```
+可以看到，主线程在关闭线程池之后，立马进入`for`循环进行了加1操作，而线程池中的其他线程还在**并行地**处理剩余任务——主线程并没有被阻塞。这正如注释所说，`shutdown`并不会阻塞等待任务的完成。
+
+如果我们希望线程池中的所有任务都执行完后再进行后续操作，我们就需要用到`awaitTermination`方法。它会**阻塞操作线程池的线程，直到线程池中的任务执行完成或者超时**。在我们的例子中，操作线程池的线程
+是主线程，所以`awaitTermination`会阻塞主线程，等到线程池完全终止后才会进入`for`循环进行加1操作。
+
+稍微过一下`awaitTermination`的实现逻辑：使用`wait`方法阻塞当前线程，直到线程池终止或等待时间用尽。如果超时，则返回`false`；如果线程池完全终止，则返回`true`：
+```Java
+public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+    log.info("Begin to wait...");
+    long startTime = System.nanoTime();
+    synchronized (lock) {
+        while (!isTerminated) {
+            long elapsed = System.nanoTime() - startTime;
+            long remaining = unit.toNanos(timeout) - elapsed;
+            if (remaining <= 0) {
+                return false;
+            }
+            lock.wait(remaining / 1000000, (int) (remaining % 1000000)); // 等待到终止
+        }
+    }
+    return true;
+}
+```
+现在，我们修改一下示例：
+1. 在主线程调用`shutdown`方法后，让主线程等待3秒钟
+2. 如果3秒之后工作线程还没处理完，则让主线程调用`shutdownNow`，将线程池立马关闭
+3. 拿到剩下未被处理的所有任务，将它们放入`List`集合中，显示其大小
+
+```Java
+pool.shutdown();
+
+if (!pool.awaitTermination(3000, TimeUnit.MILLISECONDS)) {
+    List<Runnable> remainingTasks = pool.shutdownNow();
+    log.info("The number of remaining tasks: {}", remainingTasks.size());
+}
+
+int i = 0;
+for (int j = 0; j < 100; j++) {
+    log.info("i = {}", i);
+    i++;
+}
+```
+可以预计，主线程会在线程池调用了`shutdownNow`后进入`for`循环。运行结果如下：
+```aiignore
+23:59:15.598 [main] INFO thread_pool.MyThreadPoolExecutor -- Thread pool shutting down...
+23:59:15.598 [main] INFO thread_pool.MyThreadPoolExecutor -- Begin to wait...
+```
+主线程调用`shutdown`方法关闭线程池，并开始等待。
+```aiignore
+23:59:18.600 [main] INFO thread_pool.MyThreadPoolExecutor -- Thread pool force shutting down...
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- The number of remaining tasks: 35
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 0
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 1
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 2
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 3
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 4
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 5
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 6
+23:59:18.600 [main] INFO thread_pool.TestMyThreadPool -- i = 7
+```
+预期一致，主线程确实等待了3秒才开始强制关闭线程池，并开始加1操作。
+
+到此，我们能够优雅地关闭我们的线程池了！目前为止的完整代码如下：
+```Java
+@Slf4j
+public class MyThreadPoolExecutor {
+    private final int coreSize; // 核心线程数量
+    private final int maxSize; // 线程池最多线程数量
+    private final long keepAliveTime; // 非核心线程的最长等待时间，之后销毁
+    private final TimeUnit unit; // keepAliveTime的时间单位
+    private final BlockingQueue<Runnable> taskQueue; // 任务队列
+    private final MyRejectedExecutionHandler rejectedExecutionHandler; // 拒绝策略
+
+    private final HashSet<Worker> workers = new HashSet<>(); // 工作线程集合
+    private final Object lock = new Object(); // 锁
+
+    private volatile boolean isShutdown = false;
+    private volatile boolean isTerminated = false;
+
+    public MyThreadPoolExecutor(int coreSize, int maxSize, long keepAliveTime,
+            TimeUnit unit, int queueCapacity, MyRejectedExecutionHandler rejectedExecutionHandler) {
+        this.coreSize = coreSize;
+        this.maxSize = maxSize;
+        this.keepAliveTime = keepAliveTime;
+        this.unit = unit;
+        this.taskQueue = new LinkedBlockingQueue<>(queueCapacity);
+        this.rejectedExecutionHandler = rejectedExecutionHandler;
+
+        for (int i = 0; i < coreSize; i++) {
+            addWorker(true);
+        }
+    }
+
+    public void execute(Runnable task) {
+        // 线程池感知到关闭开始，所有新来的任务走拒绝逻辑
+        if (isShutdown) {
+            rejectedExecutionHandler.rejectedExecution(task, this);
+            return;
+        }
+
+        boolean success = taskQueue.offer(task);
+        if (!success) { // 任务队列满
+            synchronized (lock) {
+                if (workers.size() < maxSize) { // 且线程池没有达到最大负荷
+                    addWorker(false); // 创建一个非核心线程
+                    taskQueue.offer(task); // 再次尝试入队
+                    return;
+                }
+            }
+
+            // 线程池已达最大负荷，走拒绝策略
+            rejectedExecutionHandler.rejectedExecution(task, this);
+        }
+    }
+
+    private void addWorker(boolean isCore) {
+        Worker worker;
+        if (isCore) {
+            worker = new Worker("core-worker-" + workers.size(), true);
+        } else {
+            worker = new Worker("non-core-worker-" + workers.size(), false);
+        }
+        synchronized (lock) {
+            workers.add(worker);
+        }
+
+        worker.start();
+    }
+
+    public void shutdown() {
+        log.info("Thread pool shutting down...");
+        isShutdown = true;
+    }
+
+    public List<Runnable> shutdownNow() {
+        log.info("Thread pool force shutting down...");
+        isShutdown = true;
+
+        List<Runnable> remainingTasks = new ArrayList<>();
+        taskQueue.drainTo(remainingTasks); // 获取全部未处理的任务
+        return remainingTasks;
+    }
+
+    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+        log.info("Begin to wait...");
+        long startTime = System.nanoTime();
+        synchronized (lock) {
+            while (!isTerminated) {
+                long elapsed = System.nanoTime() - startTime;
+                long remaining = unit.toNanos(timeout) - elapsed;
+                if (remaining <= 0) {
+                    return false;
+                }
+                lock.wait(remaining / 1000000, (int) (remaining % 1000000)); // 等待到终止
+            }
+        }
+        return true;
+    }
+
+    private class Worker extends Thread {
+
+        private final boolean core;
+
+        public Worker(String name, boolean core) {
+            super(name);
+            this.core = core;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                   Runnable task;
+                   if (core) {
+                       // 核心线程，一直阻塞地等待任务
+                       task = taskQueue.take();
+                   } else {
+                       // 非核心线程
+                       // 最多等待keepAliveTime，然后退出
+                       task = taskQueue.poll(keepAliveTime, unit);
+                       if (task == null) {
+                           synchronized (lock) {
+                               workers.remove(this);
+                           }
+
+                           log.info("{} exited due to idle timeout", this.getName());
+                           break;
+                       }
+                   }
+
+                   task.run();
+
+                   // 工作线程销毁逻辑
+                   if (isShutdown && taskQueue.isEmpty()) {
+                       synchronized (lock) {
+                           workers.remove(this);
+                       }
+
+                       log.info("{} exited due to shutdown and empty queue", this.getName());
+                       checkAndSetTermination();
+                       break;
+                   }
+                }
+            } catch (InterruptedException e) {
+                log.error(e.getMessage());
+            }
+        }
+
+        private void checkAndSetTermination() {
+            synchronized (lock) {
+                if (taskQueue.isEmpty() && workers.isEmpty() && isShutdown) {
+                    isTerminated = true;
+                    log.info("Thread pool has been fully terminated.");
+                }
+            }
+        }
+    }
+
+    /**
+     * 以下是拒绝策略
+     * 抛出异常的拒绝策略
+     */
+    public static class AbortRejectPolicy implements MyRejectedExecutionHandler {
+        public AbortRejectPolicy() { }
+
+        @Override
+        public void rejectedExecution(Runnable task, MyThreadPoolExecutor executor) {
+            throw new RuntimeException("Task " + task.toString() + " rejected");
+        }
+    }
+
+    /**
+     * 直接忽略的拒绝策略
+     */
+    public static class DiscardRejectPolicy implements MyRejectedExecutionHandler {
+        public DiscardRejectPolicy() { }
+
+        @Override
+        public void rejectedExecution(Runnable task, MyThreadPoolExecutor executor) { }
+    }
+
+    /**
+     * 记录日志的拒绝策略
+     */
+    public static class LogAndDropPolicy implements MyRejectedExecutionHandler {
+        public LogAndDropPolicy() { }
+
+        @Override
+        public void rejectedExecution(Runnable task, MyThreadPoolExecutor executor) {
+            log.info("Task {} rejected", task.toString());
+        }
+    }
+}
+```

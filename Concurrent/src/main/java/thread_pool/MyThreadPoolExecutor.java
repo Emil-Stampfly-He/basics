@@ -88,6 +88,7 @@ public class MyThreadPoolExecutor {
     }
 
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+        log.info("Begin to wait...");
         long startTime = System.nanoTime();
         synchronized (lock) {
             while (!isTerminated) {
@@ -229,6 +230,17 @@ class TestMyThreadPool {
             }
         }
 
-        pool.shutdownNow();
+        pool.shutdown();
+
+        if (!pool.awaitTermination(3000, TimeUnit.MILLISECONDS)) {
+            List<Runnable> remainingTasks = pool.shutdownNow();
+            log.info("The number of remaining tasks: {}", remainingTasks.size());
+        }
+
+        int i = 0;
+        for (int j = 0; j < 100; j++) {
+            log.info("i = {}", i);
+            i++;
+        }
     }
 }
