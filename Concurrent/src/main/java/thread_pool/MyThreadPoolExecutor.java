@@ -2,7 +2,9 @@ package thread_pool;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -17,6 +19,9 @@ public class MyThreadPoolExecutor {
 
     private final HashSet<Worker> workers = new HashSet<>(); // 工作线程集合
     private final Object lock = new Object(); // 锁
+
+    private volatile boolean isShutdown = false;
+    private volatile boolean isTerminated = false;
 
     public MyThreadPoolExecutor(int coreSize, int maxSize, long keepAliveTime,
             TimeUnit unit, int queueCapacity, MyRejectedExecutionHandler rejectedExecutionHandler) {
@@ -33,6 +38,12 @@ public class MyThreadPoolExecutor {
     }
 
     public void execute(Runnable task) {
+        // 线程池感知到关闭开始，所有新来的任务走拒绝逻辑
+        if (isShutdown) {
+            rejectedExecutionHandler.rejectedExecution(task, this);
+            return;
+        }
+
         boolean success = taskQueue.offer(task);
         if (!success) { // 任务队列满
             synchronized (lock) {
@@ -62,6 +73,34 @@ public class MyThreadPoolExecutor {
         worker.start();
     }
 
+    public void shutdown() {
+        log.info("Thread pool shutting down...");
+        isShutdown = true;
+    }
+
+    public List<Runnable> shutdownNow() {
+        log.info("Thread pool force shutting down...");
+        isShutdown = true;
+
+        List<Runnable> remainingTasks = new ArrayList<>();
+        taskQueue.drainTo(remainingTasks); // 获取全部未处理的任务
+        return remainingTasks;
+    }
+
+    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+        long startTime = System.nanoTime();
+        synchronized (lock) {
+            while (!isTerminated) {
+                long elapsed = System.nanoTime() - startTime;
+                long remaining = unit.toNanos(timeout) - elapsed;
+                if (remaining <= 0) {
+                    return false;
+                }
+                lock.wait(remaining / 1000000, (int) (remaining % 1000000)); // 等待到终止
+            }
+        }
+        return true;
+    }
 
     private class Worker extends Thread {
 
@@ -95,9 +134,29 @@ public class MyThreadPoolExecutor {
                    }
 
                    task.run();
+
+                   // 工作线程销毁逻辑
+                   if (isShutdown && taskQueue.isEmpty()) {
+                       synchronized (lock) {
+                           workers.remove(this);
+                       }
+
+                       log.info("{} exited due to shutdown and empty queue", this.getName());
+                       checkAndSetTermination();
+                       break;
+                   }
                 }
             } catch (InterruptedException e) {
                 log.error(e.getMessage());
+            }
+        }
+
+        private void checkAndSetTermination() {
+            synchronized (lock) {
+                if (taskQueue.isEmpty() && workers.isEmpty() && isShutdown) {
+                    isTerminated = true;
+                    log.info("Thread pool has been fully terminated.");
+                }
             }
         }
     }
@@ -140,17 +199,17 @@ public class MyThreadPoolExecutor {
 
 @Slf4j
 class TestMyThreadPool {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         MyThreadPoolExecutor pool = new MyThreadPoolExecutor(
                 2, // 核心线程数
                 5, // 最大线程数
                 5000L, // 非核心线程存活时间
                 TimeUnit.MILLISECONDS, // keepAliveTime为5s
-                3, // 队列容量
+                50, // 队列容量
                 new MyThreadPoolExecutor.LogAndDropPolicy()); // 使用日志记录的拒绝策略
         AtomicInteger taskId = new AtomicInteger();
 
-        while (true) {
+        for (int i = 0; i < 100; i++) {
             int currentId = taskId.getAndIncrement();
 
             pool.execute(() -> {
@@ -169,5 +228,7 @@ class TestMyThreadPool {
                 log.error(e.getMessage());
             }
         }
+
+        pool.shutdownNow();
     }
 }
