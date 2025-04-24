@@ -24,13 +24,14 @@ public class MyThreadPoolExecutor {
     private volatile boolean isTerminated = false;
 
     public MyThreadPoolExecutor(int coreSize, int maxSize, long keepAliveTime,
-            TimeUnit unit, int queueCapacity, MyRejectedExecutionHandler rejectedExecutionHandler) {
+                                TimeUnit unit, BlockingQueue<Runnable> taskQueue,
+                                MyRejectedExecutionHandler rejectedExecutionHandler) {
         this.coreSize = coreSize;
         this.maxSize = maxSize;
         this.keepAliveTime = keepAliveTime;
         this.unit = unit;
-        this.taskQueue = new LinkedBlockingQueue<>(queueCapacity);
         this.rejectedExecutionHandler = rejectedExecutionHandler;
+        this.taskQueue = taskQueue;  // 使用传入的队列类型
 
         for (int i = 0; i < coreSize; i++) {
             addWorker(true);

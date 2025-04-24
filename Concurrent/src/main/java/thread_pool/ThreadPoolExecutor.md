@@ -10,8 +10,7 @@
    1. 线程池的正常关闭
    2. 线程池的强制关闭
    3. 线程池的等待
-5. 提供`submit`方法返回`Future`，即`Callable` + `Future`
-6. `ListBlockinhQueue`vs`ArrayBlockingQueue`
+5. `LinkedBlockingQueue`vs`ArrayBlockingQueue`
 
 ## 1. 拥有固定数量工作的线程 + 任务队列
 一个最小化的线程池必须包含三个功能：接受任务、缓存队列，以及派发给工作线程。
@@ -1491,6 +1490,40 @@ public class MyThreadPoolExecutor {
         public void rejectedExecution(Runnable task, MyThreadPoolExecutor executor) {
             log.info("Task {} rejected", task.toString());
         }
+    }
+}
+```
+
+## 5. `LinkedBlockingQueue`vs`ArrayBlockingQueue`
+目前为止，我们的线程池一直使用的是`LinkedBlockingQueue`。而官方的`ThreadPoolExecutor`是允许传入一个`BlockingQueue`的，也就是说同样可以使用`ArrayBlockingQueue`作为我们的任务队列。
+那两者有什么区别？我们又应该在何时使用哪一个？
+
+1. 容量与内存管理
+   * `ArrayBlockingQueue`：固定容量，必须在创建时指定。它的内存是预先分配的，一开始就分配了全部空间。
+   * `LinkedBlockingQueue`：可调节容量，可以是无界的，也可以指定容量。在内存使用方面，它不会预先分配节点，节点会在运行时按需分配。这意味着内存使用更灵活，但也带来了分配和释放节点的开销。
+2. 性能
+   * `ArrayBlockingQueue`：单一锁机制，且不会在使用过程中创建节点，因此它的性能相对稳定。
+   * `LinkedBlockingQueue`：头尾分离的锁机制，这使得它在吞吐量上可能更好，尤其是在多个生产者和消费者的场景下。
+3. 公平性：
+   * `ArrayBlockingQueue`：可以配置调度公平性策略，这对于避免生产者/消费者的饥饿问题非常有用。
+   * `LinkedBlockingQueue`：没有类似的公平性策略，适合对于吞吐量要求更高，而不那么在乎公平性的场景。
+
+总之，如果内存已知、任务量相对稳定，则适合使用`ArrayBlockingQueue`；任务量波动量大则适合使用`LinkedBlockingQueue`。
+
+我们可以更改一下我们的线程池，使得它支持调用者指定`BlockingQueue`的具体类型，其他的都不变：
+```Java
+public MyThreadPoolExecutor(int coreSize, int maxSize, long keepAliveTime,
+                            TimeUnit unit, BlockingQueue<Runnable> taskQueue,
+                            MyRejectedExecutionHandler rejectedExecutionHandler) {
+    this.coreSize = coreSize;
+    this.maxSize = maxSize;
+    this.keepAliveTime = keepAliveTime;
+    this.unit = unit;
+    this.rejectedExecutionHandler = rejectedExecutionHandler;
+    this.taskQueue = taskQueue;  // 使用传入的队列类型
+
+    for (int i = 0; i < coreSize; i++) {
+        addWorker(true);
     }
 }
 ```
