@@ -207,7 +207,7 @@ class TestMyThreadPool {
                 5, // 最大线程数
                 5000L, // 非核心线程存活时间
                 TimeUnit.MILLISECONDS, // keepAliveTime为5s
-                50, // 队列容量
+                new LinkedBlockingQueue<>(50),
                 new MyThreadPoolExecutor.LogAndDropPolicy()); // 使用日志记录的拒绝策略
         AtomicInteger taskId = new AtomicInteger();
 
