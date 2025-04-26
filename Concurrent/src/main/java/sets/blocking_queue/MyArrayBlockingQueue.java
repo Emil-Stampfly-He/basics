@@ -1,9 +1,6 @@
-package blocking_queue;
+package sets.blocking_queue;
 
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class MyArrayBlockingQueue<T> {
     private final T[] items;

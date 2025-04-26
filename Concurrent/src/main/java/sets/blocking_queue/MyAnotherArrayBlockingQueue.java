@@ -1,4 +1,4 @@
-package blocking_queue;
+package sets.blocking_queue;
 
 import lombok.extern.slf4j.Slf4j;
 

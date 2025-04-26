@@ -1,4 +1,4 @@
-package concurrent_hash_map;
+package sets.concurrent_hash_map;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;

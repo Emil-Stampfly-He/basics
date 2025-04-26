@@ -1,4 +1,4 @@
-package thread_pool;
+package sets.thread_pool;
 
 import lombok.extern.slf4j.Slf4j;
 
