@@ -12,6 +12,7 @@
 
 #### 2. 同步器
 * [`CountDownLatch`](Concurrent/src/main/java/synchronizer/count_down_latch/CountDownLatch.md)
+* [`Semaphore`](Concurrent/src/main/java/synchronizer/semaphore/Semaphore.md)
 
 ### 二. 框架
 * Lombok
