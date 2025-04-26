@@ -2,8 +2,6 @@ package synchronizer.count_down_latch;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.TimeUnit;
-
 public class MyCountDownLatch {
 
     private int count;
@@ -20,14 +18,6 @@ public class MyCountDownLatch {
         synchronized (this) {
             while (count > 0) {
                 this.wait();
-            }
-        }
-    }
-
-    public void await(long timeout, TimeUnit unit) throws InterruptedException {
-        synchronized (this) {
-            while (count > 0) {
-                this.wait(unit.toMillis(timeout));
             }
         }
     }
@@ -51,16 +41,17 @@ public class MyCountDownLatch {
 }
 
 @Slf4j
-class TestMyCountDownLatch {
+class TestMyCountDownLatchAlternate {
     public static void main(String[] args) throws InterruptedException {
+        int nThread = 10;
         MyCountDownLatch startSignal = new MyCountDownLatch(1);
-        MyCountDownLatch endSignal = new MyCountDownLatch(10);
+        MyCountDownLatch endSignal = new MyCountDownLatch(nThread);
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < nThread; i++) {
             new Thread(() -> {
                 try {
-                    startSignal.await(); // 主线程没将计数器减到0时，新线程会被阻塞在这里
-                    doSomeWork();
+                    startSignal.await();
+                    doSomeWork(10000);
                     endSignal.countDown();
                 } catch (InterruptedException e) {
                     log.error(e.getMessage(), e);
@@ -68,18 +59,18 @@ class TestMyCountDownLatch {
             }).start();
         }
 
-        doSomeWork(); // 剩下的10个新线程都在阻塞中
+        doSomeWork(5000); // 剩下的10个新线程都在阻塞中
         startSignal.countDown(); // 主线程将计数器减到0，其他线程开始工作
-        doSomeWork();
+        doSomeWork(5000);
         endSignal.await(); // 主线程阻塞，直到10个新线程完成工作后调用计数器，将计数器减到0
 
         log.info("All done.");
     }
 
-    public static void doSomeWork() {
+    public static void doSomeWork(long consumingTime) {
         try {
             log.info("{} is doing some work", Thread.currentThread().getName());
-            Thread.sleep(10000);
+            Thread.sleep(consumingTime);
         } catch (InterruptedException e) {
             log.error(e.getMessage(), e);
         }
