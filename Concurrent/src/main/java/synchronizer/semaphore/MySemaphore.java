@@ -9,87 +9,180 @@ import java.util.Deque;
 @Slf4j
 public class MySemaphore {
 
-    private int permits; // 许可数
-    private final Deque<Thread> queue; // 队列
+    private final Sync sync;
 
-    public MySemaphore(int permits) {
-        if (permits < 0) {
-            throw new IllegalArgumentException("Permits cannot be negative.");
+    /**
+     * 委托类：Sync
+     * 默认实现：不公平信号量
+     */
+    private static class Sync {
+
+        // 将许可数委托给Sync
+        // 设置为protected是为了让子类拿到父类的permits
+        protected int permits;
+
+        Sync(int permits) {
+           this.permits = permits;
         }
 
-        this.permits = permits;
-        this.queue = new ArrayDeque<>();
-    }
+        public void acquire() throws InterruptedException {
+            this.acquire(1);
+        }
 
-    public void acquire() {
-        this.acquire(1);
+        public void acquire(int n) throws InterruptedException {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
+            }
+
+            synchronized (this) {
+                while (permits < n) {
+                    this.wait();
+                }
+
+                permits -= n;
+            }
+        }
+
+        public void release() {
+            this.release(1);
+        }
+
+        public void release(int n) {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
+            }
+
+            synchronized (this) {
+                permits += n;
+                this.notifyAll();
+            }
+        }
+
+        public boolean tryAcquire() {
+            return this.tryAcquire(1);
+        }
+
+        public boolean tryAcquire(int n) {
+            if (n <= 0) throw new IllegalArgumentException("N cannot be negative.");
+
+            synchronized (this) {
+                if (permits >= n) {
+                    permits -= n;
+                    return true;
+                }
+
+                return false;
+            }
+        }
     }
 
     /**
-     * 一次性获取n个许可
-     * @param n n个许可
+     * 非公平信号量实现
+     * 由于父类Sync的默认实现就是非公平的，NonfairSync只要继承即可
      */
-    public void acquire(int n) {
-        if (n <= 0) {
-            throw new IllegalArgumentException("N must be greater than zero.");
+    private static final class NonfairSync extends Sync {
+        NonfairSync(int permits) {
+            super(permits);
+        }
+    }
+
+    /**
+     * 公平信号量实现
+     * 需要重载acquire(int n)和tryAcquire(int n)方法
+     */
+    private static final class FairSync extends Sync {
+        private final Deque<Thread> queue = new ArrayDeque<>();
+
+        FairSync(int permits) {
+            super(permits);
         }
 
-        synchronized (this) {
-            queue.addLast(Thread.currentThread()); // 进入队列末尾
-            // 队头不是自己，说明还没轮到，必须等；或者许可数不足，也必须等
-            try {
-                while (queue.peekFirst() != Thread.currentThread() || permits < n) {
-                    this.wait();
-                }
-            } catch (InterruptedException e) {
-                // 如果线程中途挂掉，必须将线程从队列中移出，否则后续线程永远无法成为队头
-                queue.remove(Thread.currentThread());
-                log.error(e.getMessage(), e);
+        @Override
+        public void acquire(int n) throws InterruptedException {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
             }
 
-            permits -= n;
-            queue.removeFirst();
+            Thread cur = Thread.currentThread();
+            synchronized (this) {
+                queue.addLast(cur);
+                try { // 队头不是自己，说明还没轮到，必须等；或者许可数不足，也必须等
+                    while (queue.peekFirst() != cur || permits < n) {
+                        this.wait();
+                    }
+
+                    permits -= n;
+                } finally {
+                    // 不管正常返回还是异常，都必须将自己移出队列
+                    queue.remove(cur);
+                }
+            }
         }
+
+        @Override
+        public boolean tryAcquire(int n) {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N cannot be negative.");
+            }
+
+            Thread cur = Thread.currentThread();
+            synchronized (this) {
+                queue.addLast(cur);
+
+                if (queue.peekFirst() != cur || permits < n) {
+                    queue.remove(cur);
+                    return false;
+                }
+
+                permits -= n;
+                queue.remove(cur);
+                return true;
+            }
+        }
+    }
+
+
+
+
+    /**
+     * MySemaphore的构造方法
+     * @param permits 许可数
+     */
+    public MySemaphore(int permits) {
+        sync = new NonfairSync(permits);
+    }
+
+    public MySemaphore(int permits, boolean fair) {
+        sync = fair ? new FairSync(permits) : new NonfairSync(permits);
+    }
+
+
+
+
+    /* 以下均暴露给调用者 */
+    public void acquire() throws InterruptedException {
+        sync.acquire();
+    }
+
+    public void acquire(int n) throws InterruptedException {
+        sync.acquire(n);
     }
 
     public void release() {
-        this.release(1);
+        sync.release();
     }
 
     public void release(int n) {
-        if (n <= 0) {
-            throw new IllegalArgumentException("N must be greater than zero.");
-        }
-
-        synchronized (this) {
-            permits += n;
-            this.notifyAll();
-        }
+        sync.release(n);
     }
 
-    /**
-     * 尝试立马获取锁
-     * acquire是获取不到就阻塞，tryAcquire是获取不到就返回false
-     * @return 立马获取失败则返回false，否则返回true
-     */
     public boolean tryAcquire() {
-        return this.tryAcquire(1);
+        return sync.tryAcquire(1);
     }
 
     public boolean tryAcquire(int n) {
-        if (n <= 0) throw new IllegalArgumentException("N cannot be negative.");
-
-        synchronized (this) {
-            queue.addLast(Thread.currentThread());
-            if (queue.peekFirst() == Thread.currentThread() && permits >= n) {
-                permits -= n;
-                return true;
-            }
-
-            return false;
-        }
+        return sync.tryAcquire(n);
     }
-
 }
 
 @Slf4j
@@ -103,13 +196,17 @@ class TestMySemaphore {
 
         for (int i = 0; i < PERMITS; i++) {
             new Thread(() -> {
-                available.acquire();
-                sleep(5000);
-                available.release();
+                try {
+                    available.acquire();
+                    sleep(5000);
+                    available.release();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }).start();
         }
 
-        sleep(1000); // 这里让主线程睡眠一下，等待CPU调度子线程获取许可，否则CPU会来不及调度100个子线程
+        sleep(3000); // 这里让主线程睡眠一下，等待CPU调度子线程获取许可，否则CPU会来不及调度100个子线程
         log.info("Main thread trying to release permit again...");
         log.info("Result: {}", available.tryAcquire());
 
