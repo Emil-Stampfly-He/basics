@@ -423,5 +423,382 @@ public Semaphore(int permits, boolean fair) {
 为什么要这么做？在我们这个例子中，主要是简化主代码，降低耦合。如果我们不使用委托，那么我们就需要为我们所有的方法加上一个条件判断，才能使得方法同时支持公平与非公平信号量。
 这不仅会导致代码的臃肿化，而且不利于后续的扩展。
 
+接下来，我们创建一个`Sync`类作为委托父类，之后再创建两个委托子类用于具体实现公平与非公平方法：`NonfairSync` & `FairSync`。这个父类默认实现的是非公平信号量：
+```Java
+public class MySemaphore {
 
+   private final Sync sync; // 委托类成员变量
 
+   /**
+    * 委托类：Sync
+    * 默认实现：不公平信号量
+    */
+   private static class Sync {
+
+      // 将许可数委托给Sync
+      // 设置为protected是为了让子类拿到父类的permits
+      protected int permits;
+
+      Sync(int permits) {
+         this.permits = permits;
+      }
+
+      public void acquire() throws InterruptedException {
+         this.acquire(1);
+      }
+
+      public void acquire(int n) throws InterruptedException {
+         if (n <= 0) {
+            throw new IllegalArgumentException("N must be greater than zero.");
+         }
+
+         synchronized (this) {
+            while (permits < n) {
+               this.wait();
+            }
+
+            permits -= n;
+         }
+      }
+
+      public void release() {
+         this.release(1);
+      }
+
+      public void release(int n) {
+         if (n <= 0) {
+            throw new IllegalArgumentException("N must be greater than zero.");
+         }
+
+         synchronized (this) {
+            permits += n;
+            this.notifyAll();
+         }
+      }
+
+      @SuppressWarnings("unused")
+      public boolean tryAcquire() {
+         return this.tryAcquire(1);
+      }
+
+      public boolean tryAcquire(int n) {
+         if (n <= 0) throw new IllegalArgumentException("N cannot be negative.");
+
+         synchronized (this) {
+            if (permits >= n) {
+               permits -= n;
+               return true;
+            }
+
+            return false;
+         }
+      }
+   }
+}
+```
+注意到我们将原来`MySemaphore`的成员变量`permits`也移交给了`Sync`进行委托，这样做是为了最大程度上地解除耦合。
+
+接下来就是`NonfairSync` & `FairSync`。对于`NonfairSync`，由于其父类默认实现的是非公平，所以它不需要重载任何方法。而`FairSync`则需要重载`acquire`和`tryAcquire`方法，使得它们是公平的。
+我们已经在上一小节实现过了公平的`acquire`和`tryAcquire`，所以只需要复制粘贴即可（可以加一个`@Override`提醒自己）：
+```Java
+/**
+ * 非公平信号量实现
+ * 由于父类Sync的默认实现就是非公平的，NonfairSync只要继承即可
+ */
+private static final class NonfairSync extends Sync {
+   NonfairSync(int permits) {
+      super(permits);
+   }
+}
+
+/**
+ * 公平信号量实现
+ * 需要重载acquire(int n)和tryAcquire(int n)方法
+ */
+private static final class FairSync extends Sync {
+   private final Deque<Thread> queue = new ArrayDeque<>();
+
+   FairSync(int permits) {
+      super(permits);
+   }
+
+   @Override
+   public void acquire(int n) throws InterruptedException {
+      if (n <= 0) {
+         throw new IllegalArgumentException("N must be greater than zero.");
+      }
+
+      Thread cur = Thread.currentThread();
+      synchronized (this) {
+         queue.addLast(cur);
+         try { // 队头不是自己，说明还没轮到，必须等；或者许可数不足，也必须等
+            while (queue.peekFirst() != cur || permits < n) {
+               this.wait();
+            }
+
+            permits -= n;
+         } finally {
+            // 不管正常返回还是异常，都必须将自己移出队列
+            queue.remove(cur);
+         }
+      }
+   }
+
+   @Override
+   public boolean tryAcquire(int n) {
+      if (n <= 0) {
+         throw new IllegalArgumentException("N cannot be negative.");
+      }
+
+      Thread cur = Thread.currentThread();
+      synchronized (this) {
+         queue.addLast(cur);
+
+         if (queue.peekFirst() != cur || permits < n) {
+            queue.remove(cur);
+            return false;
+         }
+
+         permits -= n;
+         queue.remove(cur);
+         return true;
+      }
+   }
+}
+```
+到此为止，委托类就完全实现好了。此时我们要做的就是实现暴露给调用者的方法：构造器与具体方法。
+1. 对于构造器，我们允许用户传入或不传入一个`boolean`值，从而视情况指定公平还是非公平。
+```Java
+/**
+* MySemaphore的构造方法
+* @param permits 许可数
+*/
+public MySemaphore(int permits) {
+    sync = new NonfairSync(permits);
+}
+
+public MySemaphore(int permits, boolean fair) {
+    sync = fair ? new FairSync(permits) : new NonfairSync(permits);
+}
+```
+可见，我们表面上调用的是`MySemaphore`，实际上内部是创建了一个新的`Sync`子类对象。
+2. 对于其他方法，只需要指定成员变量`sync`调用即可。
+
+```Java
+/**
+* MySemaphore的构造方法
+* @param permits 许可数
+*/
+public MySemaphore(int permits) {
+    sync = new NonfairSync(permits);
+}
+
+public MySemaphore(int permits, boolean fair) {
+    sync = fair ? new FairSync(permits) : new NonfairSync(permits);
+}
+
+/* 以下均暴露给调用者 */
+public void acquire() throws InterruptedException {
+    sync.acquire();
+}
+
+public void acquire(int n) throws InterruptedException {
+    sync.acquire(n);
+}
+
+public void release() {
+    sync.release();
+}
+
+public void release(int n) {
+    sync.release(n);
+}
+
+public boolean tryAcquire() {
+    return sync.tryAcquire(1);
+}
+
+public boolean tryAcquire(int n) {
+    return sync.tryAcquire(n);
+}
+```
+当调用上述的方法时，`sync`会自动根据自己的在构造器中被指定的具体类型，选取公平还是非公平的方法。
+
+我们的重构到此就结束了，也离官方的实现又更近了一步。当然，官方的`Sync`继承了`AbstractQueuedSynchronizer`（AQS，队列同步器；被用来实现各种锁以及各种同步工具），因此会有更多可以直接使用的方法，我们在此做了简化处理。目前为止的代码如下：
+
+```Java
+@Slf4j
+public class MySemaphore {
+
+    private final Sync sync;
+
+    /**
+     * 委托类：Sync
+     * 默认实现：不公平信号量
+     */
+    private static class Sync {
+
+        // 将许可数委托给Sync
+        // 设置为protected是为了让子类拿到父类的permits
+        protected int permits;
+
+        Sync(int permits) {
+           this.permits = permits;
+        }
+
+        public void acquire() throws InterruptedException {
+            this.acquire(1);
+        }
+
+        public void acquire(int n) throws InterruptedException {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
+            }
+
+            synchronized (this) {
+                while (permits < n) {
+                    this.wait();
+                }
+
+                permits -= n;
+            }
+        }
+
+        public void release() {
+            this.release(1);
+        }
+
+        public void release(int n) {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
+            }
+
+            synchronized (this) {
+                permits += n;
+                this.notifyAll();
+            }
+        }
+
+        public boolean tryAcquire() {
+            return this.tryAcquire(1);
+        }
+
+        public boolean tryAcquire(int n) {
+            if (n <= 0) throw new IllegalArgumentException("N cannot be negative.");
+
+            synchronized (this) {
+                if (permits >= n) {
+                    permits -= n;
+                    return true;
+                }
+
+                return false;
+            }
+        }
+    }
+
+    /**
+     * 非公平信号量实现
+     * 由于父类Sync的默认实现就是非公平的，NonfairSync只要继承即可
+     */
+    private static final class NonfairSync extends Sync {
+        NonfairSync(int permits) {
+            super(permits);
+        }
+    }
+
+    /**
+     * 公平信号量实现
+     * 需要重载acquire(int n)和tryAcquire(int n)方法
+     */
+    private static final class FairSync extends Sync {
+        private final Deque<Thread> queue = new ArrayDeque<>();
+
+        FairSync(int permits) {
+            super(permits);
+        }
+
+        @Override
+        public void acquire(int n) throws InterruptedException {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N must be greater than zero.");
+            }
+
+            Thread cur = Thread.currentThread();
+            synchronized (this) {
+                queue.addLast(cur);
+                try { // 队头不是自己，说明还没轮到，必须等；或者许可数不足，也必须等
+                    while (queue.peekFirst() != cur || permits < n) {
+                        this.wait();
+                    }
+
+                    permits -= n;
+                } finally {
+                    // 不管正常返回还是异常，都必须将自己移出队列
+                    queue.remove(cur);
+                }
+            }
+        }
+
+        @Override
+        public boolean tryAcquire(int n) {
+            if (n <= 0) {
+                throw new IllegalArgumentException("N cannot be negative.");
+            }
+
+            Thread cur = Thread.currentThread();
+            synchronized (this) {
+                queue.addLast(cur);
+
+                if (queue.peekFirst() != cur || permits < n) {
+                    queue.remove(cur);
+                    return false;
+                }
+
+                permits -= n;
+                queue.remove(cur);
+                return true;
+            }
+        }
+    }
+    
+    /**
+     * MySemaphore的构造方法
+     * @param permits 许可数
+     */
+    public MySemaphore(int permits) {
+        sync = new NonfairSync(permits);
+    }
+
+    public MySemaphore(int permits, boolean fair) {
+        sync = fair ? new FairSync(permits) : new NonfairSync(permits);
+    }
+    
+    /* 以下均暴露给调用者 */
+    public void acquire() throws InterruptedException {
+        sync.acquire();
+    }
+
+    public void acquire(int n) throws InterruptedException {
+        sync.acquire(n);
+    }
+
+    public void release() {
+        sync.release();
+    }
+
+    public void release(int n) {
+        sync.release(n);
+    }
+
+    public boolean tryAcquire() {
+        return sync.tryAcquire(1);
+    }
+
+    public boolean tryAcquire(int n) {
+        return sync.tryAcquire(n);
+    }
+}
+```
+
+## 4. 优化：`synchronized` → CAS

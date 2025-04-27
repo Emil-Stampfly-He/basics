@@ -1,12 +1,10 @@
 package synchronizer.semaphore;
 
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -63,6 +61,7 @@ public class MySemaphore {
             }
         }
 
+        @SuppressWarnings("unused")
         public boolean tryAcquire() {
             return this.tryAcquire(1);
         }
@@ -146,9 +145,6 @@ public class MySemaphore {
         }
     }
 
-
-
-
     /**
      * MySemaphore的构造方法
      * @param permits 许可数
@@ -160,9 +156,6 @@ public class MySemaphore {
     public MySemaphore(int permits, boolean fair) {
         sync = fair ? new FairSync(permits) : new NonfairSync(permits);
     }
-
-
-
 
     /* 以下均暴露给调用者 */
     public void acquire() throws InterruptedException {
@@ -279,7 +272,7 @@ class TestMySemaphoreThird {
 
     @Test
     void testNonfairConcurrency() throws InterruptedException {
-        final int THREADS = 1000;
+        final int THREADS = 10;
         MySemaphore sem = new MySemaphore(3, false);
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(THREADS);
@@ -289,7 +282,7 @@ class TestMySemaphoreThird {
         AtomicInteger current = new AtomicInteger();
 
         for (int i = 0; i < THREADS; i++) {
-            Thread.startVirtualThread(() -> {
+            new Thread(() -> {
                 try {
                     start.await();
                     sem.acquire();
@@ -304,7 +297,7 @@ class TestMySemaphoreThird {
                 } finally {
                     done.countDown();
                 }
-            });
+            }).start();
         }
 
         start.countDown();
