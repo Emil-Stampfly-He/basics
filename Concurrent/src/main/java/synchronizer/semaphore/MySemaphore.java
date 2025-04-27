@@ -2,9 +2,14 @@ package synchronizer.semaphore;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @Slf4j
 public class MySemaphore {
@@ -186,7 +191,7 @@ public class MySemaphore {
 }
 
 @Slf4j
-class TestMySemaphore {
+class TestMySemaphoreFirst {
     private static final int PERMITS = 100;
 
     public static void main(String[] args) {
@@ -224,20 +229,88 @@ class TestMySemaphore {
     }
 }
 
-class TestMySemaphoreAlternate {
+@Slf4j
+class TestMySemaphoreSecond {
     public static void main(String[] args) throws InterruptedException {
         MySemaphore semA = new MySemaphore(3);
         semA.acquire(3); // permits = 0
+        log.info("1 passed");
 
         boolean secondA = semA.tryAcquire();
-        Assertions.assertFalse(secondA);
+        assertFalse(secondA);
+        log.info("2 passed");
 
         semA.release(2); // permits = 2
 
         boolean thirdA = semA.tryAcquire(); // permits = 1
-        Assertions.assertTrue(thirdA);
+        assertTrue(thirdA);
+        log.info("3 passed");
 
         semA.acquire(2); // 1 < 2, 线程会被阻塞
+    }
+}
+
+class TestMySemaphoreThird {
+
+    @Test
+    public void testSingleThreadAcquireRelease() throws InterruptedException {
+        MySemaphore sem = new MySemaphore(2);
+        // 两次 acquire 都能拿到
+        sem.acquire();
+        sem.acquire();
+        // 此时所有许可证用完，tryAcquire 应返回 false
+        assertFalse(sem.tryAcquire());
+        // 归还一个
+        sem.release();
+        // 现在又能拿到一个
+        assertTrue(sem.tryAcquire());
+    }
+
+    @Test
+    void testTryAcquireMultiple() {
+        MySemaphore sem = new MySemaphore(3);
+        // 一次性尝试拿 2 个
+        assertTrue(sem.tryAcquire(2));
+        // 剩余 1，试拿 2 个失败
+        assertFalse(sem.tryAcquire(2));
+        // 剩余仍是 1
+        assertTrue(sem.tryAcquire(1));
+    }
+
+    @Test
+    void testNonfairConcurrency() throws InterruptedException {
+        final int THREADS = 1000;
+        MySemaphore sem = new MySemaphore(3, false);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(THREADS);
+
+        // 记录实际并发运行的最大线程数
+        AtomicInteger maxConcurrent = new AtomicInteger();
+        AtomicInteger current = new AtomicInteger();
+
+        for (int i = 0; i < THREADS; i++) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    start.await();
+                    sem.acquire();
+                    int running = current.incrementAndGet();
+                    maxConcurrent.getAndUpdate(prev -> Math.max(prev, running));
+                    // 模拟工作
+                    Thread.sleep(100);
+                    current.decrementAndGet();
+                    sem.release();
+                } catch (Exception e) {
+                    fail(e);
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+
+        start.countDown();
+        done.await();
+        // 最多三个线程应该同时持有许可
+        assertTrue(maxConcurrent.get() <= 3);
     }
 }
 
