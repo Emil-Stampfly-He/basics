@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Slf4j
 public class Main {
@@ -17,7 +18,7 @@ public class Main {
         //CountDownLatch startSign = new CountDownLatch(1);
         ParkingLotDispatcher dispatcher = new ParkingLotDispatcher(x, y);
         BlockingQueue<Car> waitingQueue = dispatcher.getWaitingQueue();
-        Thread producer = getThread(x, y, waitingQueue);
+        Thread producer = getProducerThread(x, y, waitingQueue);
 
         producer.start();
         dispatcher.start();
@@ -25,8 +26,9 @@ public class Main {
         producer.join();
     }
 
-    private static Thread getThread(int x, int y, BlockingQueue<Car> waitingQueue) {
+    private static Thread getProducerThread(int x, int y, BlockingQueue<Car> waitingQueue) {
         ConcurrentHashMap<Long, Car> unparkedCars = new ConcurrentHashMap<>(x * y);
+        CopyOnWriteArrayList<Car> parkedCars = new CopyOnWriteArrayList<>();
         for (int i = 0; i < x * y; i++) {
             Car car = new Car();
             car.setId(i);
@@ -37,12 +39,15 @@ public class Main {
             Random rand = new Random();
             while (running) {
                 try {
+                    if (parkedCars.size() == x * y) break;
 
                     int id = rand.nextInt(x * y);
                     Car unparkedCar = unparkedCars.get((long) id);
                     if (unparkedCar == null) continue;
 
                     waitingQueue.put(unparkedCar);
+                    parkedCars.add(unparkedCar);
+                    unparkedCars.remove((long) id);
 
                 } catch (InterruptedException e) {
                     log.error(e.getMessage(), e);
