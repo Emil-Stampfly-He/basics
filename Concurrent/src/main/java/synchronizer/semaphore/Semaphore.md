@@ -20,6 +20,8 @@
    * 公平信号量
    * 重构：委托模式
 4. 优化？`synchronized` → CAS
+   * `VarHandle`实现CAS操作
+   * CAS性能一定比`synchronized`好吗？
 
 ## 1. 基础构造
 由信号量的定义可知，它拥有一个整型成员变量`permit`：
@@ -802,4 +804,230 @@ public class MySemaphore {
 ```
 
 ## 4. 优化？`synchronized` → CAS
+在并发编程中，我们最直观的做法是用 `synchronized` 加 `wait`/`notify` 来实现信号量——线程许可不足时进入阻塞，许可到来时用 notifyAll() 唤醒。但阻塞和唤醒背后其实走的是操作系统的 `park`/`unpark`，往往要付出一次完整的上下文切换成本。
+既然阻塞有开销，能不能让线程在不拿到许可的时候直接自旋呢？这就是CAS操作。我们希望的是，如果线程没法拿到足够的许可，就自旋等待；否则就原子地更新。
 
+如何做到原子更新？点开`Semaphore`源码，可以看到它使用了一个叫`compareAndSetState`的方法。这个方法是一个本地方法（`native`方法），属于AQS，`State`就是我们所说的“许可”。而这个方法又是由`Unsafe`类中的`compareAndSetInt`实现的。
+但是，JDK的`Unsafe`类并没有提供公开的API，这说明官方并不希望我们直接使用`Unsafe`类，而且我们也不可能再去写一遍底层代码。那有什么替代方案吗？
+
+### 4.1. `VarHandle`
+其实不只是JDK有一个`UnSafe`类，`sun.misc`包下也有一个`Unsafe`类，甚至是公开API可供我们使用：
+
+```Java
+import sun.misc.Unsafe;
+
+private static final Unsafe U = Unsafe.getUnsafe();
+```
+尝试调用一下它里面的方法，却发现几乎全部被加上了`@Deprecated`标识，且未来会被移除，不能保证跨版本兼容，使用的话甚至会报错。好在注释说明了，我们应该转而使用`VarHandle`来实现相同的功能。
+
+简而言之，`VarHandle`是用于替代`Unsafe`的，暴露安全可控的、跨版本兼容的底层变量访问手段，而且比原子类更加通用。所以，我们转而在`MySemaphore`中创建一个`VarHandle`的对象：
+```Java
+private static final VarHandle V;
+
+static {
+   try {
+      // MethodHandles.lookup().findVarHandle()来创建一个VarHandle对象
+      // Sync.class表明要操作的变量再Sync类中
+      // “permits”是变量名
+      // int.class是permits的类型
+      V = MethodHandles.lookup().findVarHandle(Sync.class, "permits", int.class);
+   } catch (IllegalAccessException | NoSuchFieldException e) {
+      throw new RuntimeException(e);
+   }
+}
+```
+这样，我们就可以在`Sync`及其子类中使用`VarHandle`给我们提供的底层指令了：
+1. 首先判断许可是否充足，不足则自旋等待
+2. 如果充足，原子地更新许可数
+```Java
+public void acquire(int n) throws InterruptedException {
+   if (n <= 0) {
+       throw new IllegalArgumentException("N must be greater than zero.");
+   }
+
+//  synchronized (this) {
+//      while (permits < n) {
+//      this.wait();
+//      }
+//
+//      permits -= n;
+//  }
+
+   // CAS
+   while (true) {
+       int available = this.permits;
+       int remaining = available - n;
+       if (remaining < 0) {
+           // 许可暂时不够，自旋等待
+           Thread.onSpinWait();
+           continue;
+       }
+
+       if (V.compareAndSet(this, available, remaining)) {
+           break;
+       }
+   }
+}
+```
+需要注意的是，之所以将CAS方法放在死循环中，是因为CAS方法不一定一次尝试就能成功。所以需要给它多次尝试更新的机会，直到更新成功为止。
+
+按照类似的逻辑，我们也可以更改一下`tryAcquire`方法：
+```Java
+public boolean tryAcquire(int n) {
+   if (n <= 0) throw new IllegalArgumentException("N cannot be negative.");
+
+//            synchronized (this) {
+//                if (permits >= n) {
+//                    permits -= n;
+//                    return true;
+//                }
+//
+//                return false;
+//            }
+
+   // CAS
+   while (true) {
+       int available = this.permits;
+       int remaining = available - n;
+       if (remaining < 0) {
+           return false;
+       }
+
+       if (V.compareAndSet(this, available, remaining)) {
+           return true;
+       }
+   }
+}
+```
+逻辑与`acquire`是一样的，只不过调用这个方法的线程不满足条件不会被阻塞，而是直接返回`false`。
+
+既然`acquire`和`tryAcquire`都不再使用`wait`来唤醒线程，`release`方法也需要去掉`notify`/`notifyAll`方法：
+```Java
+public void release(int n) {
+    if (n <= 0) throw new IllegalArgumentException("N cannot be negative");
+    
+    // 无条件地加上，因此不需要放到死循环中
+    V.getAndAdd(this, n);
+}
+```
+因为释放许可是无条件的，可以直接释放，所以`release`的CAS操作不需要放到死循环中。
+
+### 4.2. CAS性能一定比`synchronized`好吗？
+以上，我们将全部的`synchronized`块改成了CAS。很多人的第一反应是，CAS性能肯定更好了。事实情况真的是这样吗？
+
+当我们在比较CAS与`synchronized`的时候，我们不仅仅是比较CAS与`synchronized`关键字本身，而是比较CAS与JVM内部用于实现`synchronized`的算法的性能。
+`synchronized`关键字底层本身是自旋+挂起(`park`)的结合：JVM的`synchronized`在失败后，会先做出有限次的自旋，再滑向挂起，让出CPU。而在我们的CAS操作中：
+```Java
+while (true) {
+    int available = this.permits;
+    int remaining = available - n;
+    if (remaining < 0) {
+        return false;
+    }
+
+    if (V.compareAndSet(this, available, remaining)) {
+        return true;
+    }
+}
+```
+线程如果拿不到许可，就会一直在死循环中自旋，不断消耗CPU资源。如果并发线程数超过CPU核心数，线程们就会抢着自旋，自旋尝试不过也不会被挂起，导致大量的“空转”，严重拉低了整体的吞吐。
+所以，虽然`synchronized`中线程面临上下文切换的代价，但却能够在高并发场景下有效避免忙等。
+
+此外，`synchronized`本身借鉴了CAS+自旋的思想。一个对象监视器(monitor)的内部信息主要包括：一个表示锁状态及重入次数的`int`值、一个指向当前持有锁的线程的引用，以及一个等待队列（queue），存放所有等待获取该监视器的线程。
+等待队列的操作最为耗时：将线程加入队列、将其从线程调度中移除，以及在当前持有者释放锁时将其唤醒，都会耗费相当的时间。
+
+在无竞争的情况下，等待队列自然不会参与。获取监视器仅需一次 CAS 操作，将状态从“未占用”（通常为 0）更新为“已占用、重入次数为 1”（某个常见值），成功后线程即可进入临界区；释放监视器时只需写回“未占用”状态（同时保证必要的内存可见性），然后如果有挂起的线程就唤醒其中一个。
+这便是`synchronized`的**轻量级锁**实现。
+
+如果不仅仅是无竞争，而且同一个线程在首次尝试执行`synchronized`块后仍然没有其他线程进入块，那么`synchronized`会被优化成**偏向锁**。如果以后同一线程再来，可以直接进入临界区，实现零CAS（可以理解为**偏向**这个线程）。
+
+因此，从本质上说，原有的`synchronized`块方法反而更接近官方的实现。官方的实现采用了自旋与挂起的结合：
+```Java
+final int acquire(Node node, int arg, boolean shared,
+                  boolean interruptible, boolean timed, long time) {
+   Thread current = Thread.currentThread();
+   byte spins = 0, postSpins = 0;   // retries upon unpark of first thread
+   boolean interrupted = false, first = false;
+   Node pred = null;               // predecessor of node when enqueued
+   
+   for (;;) {
+      if (!first && (pred = (node == null) ? null : node.prev) != null &&
+              !(first = (head == pred))) {
+         if (pred.status < 0) {
+            cleanQueue();           // predecessor cancelled
+            continue;
+         } else if (pred.prev == null) {
+            Thread.onSpinWait();    // ensure serialization
+            continue;
+         }
+      }
+      if (first || pred == null) {
+         boolean acquired;
+         try {
+            if (shared)
+               acquired = (tryAcquireShared(arg) >= 0);
+            else
+               acquired = tryAcquire(arg);
+         } catch (Throwable ex) {
+            cancelAcquire(node, interrupted, false);
+            throw ex;
+         }
+         if (acquired) {
+            if (first) {
+               node.prev = null;
+               head = node;
+               pred.next = null;
+               node.waiter = null;
+               if (shared)
+                  signalNextIfShared(node);
+               if (interrupted)
+                  current.interrupt();
+            }
+            return 1;
+         }
+      }
+      Node t;
+      if ((t = tail) == null) {           // initialize queue
+         if (tryInitializeHead() == null)
+            return acquireOnOOME(shared, arg);
+      } else if (node == null) {          // allocate; retry before enqueue
+         try {
+            node = (shared) ? new SharedNode() : new ExclusiveNode();
+         } catch (OutOfMemoryError oome) {
+            return acquireOnOOME(shared, arg);
+         }
+      } else if (pred == null) {          // try to enqueue
+         node.waiter = current;
+         node.setPrevRelaxed(t);         // avoid unnecessary fence
+         if (!casTail(t, node))
+            node.setPrevRelaxed(null);  // back out
+         else
+            t.next = node;
+      } else if (first && spins != 0) {
+         --spins;                        // reduce unfairness on rewaits
+         Thread.onSpinWait();
+      } else if (node.status == 0) {
+         node.status = WAITING;          // enable signal and recheck
+      } else {
+         spins = postSpins = (byte)((postSpins << 1) | 1);
+         try {
+            long nanos;
+            if (!timed)
+               LockSupport.park(this);
+            else if ((nanos = time - System.nanoTime()) > 0L)
+               LockSupport.parkNanos(this, nanos);
+            else
+               break;
+         } catch (Error | RuntimeException ex) {
+            cancelAcquire(node, interrupted, interruptible); // cancel & rethrow
+            throw ex;
+         }
+         node.clearStatus();
+         if ((interrupted |= Thread.interrupted()) && interruptible)
+            break;
+      }
+   }
+   return cancelAcquire(node, interrupted, interruptible);
+}
+```
+方法逻辑复杂不看。我们只需注意到方法中混合使用了`onSpinWait`和`park`方法即可。
