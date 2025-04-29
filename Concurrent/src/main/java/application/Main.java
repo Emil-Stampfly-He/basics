@@ -2,6 +2,7 @@ package application;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,15 +16,16 @@ public class Main {
     public static void main(String[] args) throws InterruptedException {
         int x = 3;
         int y = 3;
-        //CountDownLatch startSign = new CountDownLatch(1);
         ParkingLotDispatcher dispatcher = new ParkingLotDispatcher(x, y);
         BlockingQueue<Car> waitingQueue = dispatcher.getWaitingQueue();
         Thread producer = getProducerThread(x, y, waitingQueue);
 
         producer.start();
-        dispatcher.start();
+        Duration elapsed = dispatcher.start();
         running = false;
         producer.join();
+
+        log.info("Time spent: {} ms", elapsed.getNano() / 1_000_000);
     }
 
     private static Thread getProducerThread(int x, int y, BlockingQueue<Car> waitingQueue) {
