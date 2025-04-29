@@ -19,7 +19,7 @@
 3. 支持公平与非公平信号量
    * 公平信号量
    * 重构：委托模式
-4. 优化：`synchronized` → CAS
+4. 优化？`synchronized` → CAS
 
 ## 1. 基础构造
 由信号量的定义可知，它拥有一个整型成员变量`permit`：
@@ -801,4 +801,5 @@ public class MySemaphore {
 }
 ```
 
-## 4. 优化：`synchronized` → CAS
+## 4. 优化？`synchronized` → CAS
+

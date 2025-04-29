@@ -16,6 +16,22 @@ public class MySemaphore {
 
     private final Sync sync;
 
+    // 可以使用Unsafe，但Unsafe不属于公开API
+    // 转为使用VarHandle，同样支持使用底层指令来进行原子操作
+    private static final VarHandle V;
+
+    static {
+        try {
+            // MethodHandles.lookup().findVarHandle()来创建一个VarHandle对象
+            // Sync.class表明要操作的变量再Sync类中
+            // “permits”是变量名
+            // int.class是permits的类型
+            V = MethodHandles.lookup().findVarHandle(Sync.class, "permits", int.class);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * 委托类：Sync
      * 默认实现：不公平信号量
@@ -26,23 +42,6 @@ public class MySemaphore {
         // 设置为protected是为了让子类拿到父类的permits
         // 设置为volatile是为了保证在CAS操作中多线程之间的可见性
         protected volatile int permits;
-
-        // 可以使用Unsafe，但Unsafe不属于公开API
-        // 转为使用VarHandle，同样支持使用底层指令来进行原子操作
-        private static final VarHandle V;
-
-        static {
-            try {
-                // MethodHandles.lookup().findVarHandle()来创建一个VarHandle对象
-                // Sync.class表明要操作的变量再Sync类中
-                // “permits”是变量名
-                // int.class是permits的类型
-                V = MethodHandles.lookup().findVarHandle(Sync.class, "permits", int.class);
-            } catch (IllegalAccessException | NoSuchFieldException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
 
         Sync(int permits) {
            this.permits = permits;
@@ -65,12 +64,12 @@ public class MySemaphore {
 //                permits -= n;
 //            }
 
+            // CAS
             while (true) {
                 int available = this.permits;
                 int remaining = available - n;
                 if (remaining < 0) {
                     // 许可暂时不够，自旋等待
-                    // 注意不得使用this.wait()，因为this不再代表当前线程
                     Thread.onSpinWait();
                     continue;
                 }
@@ -90,10 +89,13 @@ public class MySemaphore {
                 throw new IllegalArgumentException("N must be greater than zero.");
             }
 
-            synchronized (this) {
-                permits += n;
-                this.notifyAll();
-            }
+//            synchronized (this) {
+//                permits += n;
+//                this.notifyAll();
+//            }
+
+            // 无条件地加上，因此不需要放到死循环中
+            V.getAndAdd(this, n);
         }
 
         @SuppressWarnings("unused")
@@ -113,6 +115,7 @@ public class MySemaphore {
 //                return false;
 //            }
 
+            // CAS
             while (true) {
                 int available = this.permits;
                 int remaining = available - n;
@@ -140,7 +143,6 @@ public class MySemaphore {
     /**
      * 公平信号量实现
      * 需要重载acquire(int n)和tryAcquire(int n)方法
-     * TODO 公平信号量需要改为CAS操作
      */
     private static final class FairSync extends Sync {
         private final Deque<Thread> queue = new ArrayDeque<>();
@@ -244,11 +246,11 @@ class TestMySemaphoreFirst {
             new Thread(() -> {
                 try {
                     available.acquire();
-                    sleep(5000);
-                    available.release();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
+                sleep(5000);
+                available.release();
             }).start();
         }
 
