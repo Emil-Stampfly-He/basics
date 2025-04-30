@@ -14,9 +14,9 @@ public class Main {
     private static volatile boolean running = true;
 
     public static void main(String[] args) throws InterruptedException {
-        int x = 3;
-        int y = 3;
-        ParkingLotDispatcher dispatcher = new ParkingLotDispatcher(x, y);
+        int x = 10;
+        int y = 10;
+        ParkingLotDispatcher dispatcher = new ParkingLotDispatcher(x, y, 5);
         BlockingQueue<Car> waitingQueue = dispatcher.getWaitingQueue();
         Thread producer = getProducerThread(x, y, waitingQueue);
 

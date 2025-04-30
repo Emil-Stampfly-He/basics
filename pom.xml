@@ -12,6 +12,7 @@
         <module>Concurrent</module>
         <module>Frameworks</module>
         <module>New</module>
+        <module>Core</module>
     </modules>
 
     <dependencies>
