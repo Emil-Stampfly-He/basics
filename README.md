@@ -1,6 +1,7 @@
 # 从零开始手写所有八股文（持续更新）
 
-[Lines of Code](https://img.shields.io/endpoint?url=https://Emil-Stampfly-He.github.io/basics/badge.json)
+![Lines of Code](https://img.shields.io/endpoint?url=https://Emil-Stampfly.github.io/basics/badge.json)
+
 
 ## 一、Java核心语言特性
 ### 1. 基本类型与包装类型
