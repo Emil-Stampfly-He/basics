@@ -217,17 +217,15 @@ public class TargetFastClass {
 
 写一个测试检测一下`TargetFastClass`的行为：
 ```java
-public class TestTargetFastClass {
-    public static void main(String[] args) {
-        TargetFastClass targetFastClass = new TargetFastClass();
-        int index = targetFastClass.getIndex(new Signature("save", "()V"));
-        System.out.println(index);
+public static void main(String[] args) {
+    TargetFastClass targetFastClass = new TargetFastClass();
+    int index = targetFastClass.getIndex(new Signature("save", "()V"));
+    System.out.println(index);
 
-        targetFastClass.invoke(index, new Target(), new Object[0]); // save()
+    targetFastClass.invoke(index, new Target(), new Object[0]); // save()
 
-        index = targetFastClass.getIndex(new Signature("save", "(I)V"));
-        targetFastClass.invoke(index, new Target(), new Object[]{1}); // save(int)
-    }
+    index = targetFastClass.getIndex(new Signature("save", "(I)V"));
+    targetFastClass.invoke(index, new Target(), new Object[]{1}); // save(int)
 }
 ```
 

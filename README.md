@@ -11,7 +11,9 @@
 * 类型擦除机制
 ### 3. 反射 & 动态代理
 * `Class.forName()` / `newInstance()`
-* [JDK动态代理 vs CGLIB代理原理](Core/src/main/java/proxy/DynamicProxy.md)
+* [JDK动态代理 vs CGLIB代理原理]
+  * [JDK动态代理](Core/src/main/java/proxy/jdk/JDKDynamicProxy.md)
+  * [CGLIB动态代理](Core/src/main/java/proxy/cglib/CGLIBDynamicProxy.md)
 ### 4. 注解处理
 * Lombok的`@Data`
 
