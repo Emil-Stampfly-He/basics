@@ -1,8 +1,11 @@
 # CGLIB动态代理
 
+更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
 > 注意：以下代码若运行报错：
 > 
->`java.lang.reflect.InaccessibleObjectException: Unable to make protected final java.lang.Class java.lang.ClassLoader.defineClass(java.lang.String,byte[],int,int,java.security.ProtectionDomain) throws java.lang.ClassFormatError accessible: module java.base does not "opens java.lang" to unnamed module @2ef1e4fa`
+>>`java.lang.reflect.InaccessibleObjectException: Unable to make protected final java.lang.Class java.lang.ClassLoader.defineClass(java.lang.String,byte[],int,int,java.security.ProtectionDomain) throws java.lang.ClassFormatError accessible: module java.base does not "opens java.lang" to unnamed module @2ef1e4fa`
 >
 > 则需要手动在VM Option中添加指令：`--add-opens java.base/java.lang=ALL-UNNAMED`
 

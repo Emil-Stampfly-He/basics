@@ -2,7 +2,7 @@
 
 >**本笔记基于黑马程序员 Spring高级源码解读**
 > 
-> 更美观清晰的版本在：**Github: https://github.com/Emil-Stampfly-He/basics**
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
 
 JDK 动态代理是 Java 标准库提供的一种基于接口、反射机制的运行时代理技术。它允许在不改动原有类代码的前提下，对接口方法调用进行统一拦截和增强。其主要特点是：
 1. **只能基于接口代理**  
@@ -177,7 +177,7 @@ public class $Proxy0 implements Main.Foo {
 这样，无论接口有多少方法，代理类模板都一样：通过反射拿到`Method`，把方法名、参数、调用都交给统一的`InvocationHandler`。
 并且，拦截器既可以在调用前后做任何增强，也可以在运行时决定要调用哪个目标对象的哪个方法，真正做到了“全动态”。
 
-总结一下JDK动态代理的调用链：
+最后，总结一下JDK动态代理的调用链：
 ```aiignore
 [客户端调用 proxy.foo()]
             ↓
