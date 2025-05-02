@@ -2,6 +2,7 @@ package proxy.jdk;
 
 import java.lang.reflect.Method;
 
+// 模拟的一个代理类，实际上JDK是通过ASM技术生成的
 public class $Proxy0 implements Main.Foo {
 
     private final InvocationHandler handler;

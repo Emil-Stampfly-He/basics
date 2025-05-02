@@ -1,6 +1,7 @@
 # JDK动态代理
 
 ## 1. 最简单的情况
+我们模拟创建一个代理类`$Proxy0`，这个类实际上会由JDK通过ASM的技术生成`.class`字节码并被动态地加载。
 ```java
 public class Main {
 
@@ -21,7 +22,6 @@ public class Main {
     }
 }
 ```
-
 ```java
 public class $Proxy0 implements Main.Foo {
     
