@@ -1,5 +1,6 @@
 # CGLIB动态代理
 
+
 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
 >**本笔记基于黑马程序员 Spring高级源码解读**
 >
@@ -9,31 +10,34 @@
 >
 > 则需要手动在VM Option中添加指令：`--add-opens java.base/java.lang=ALL-UNNAMED`
 
-## 1. 反射调用：`method.invoke`
+与JDK动态代理技术类似，CGLIB也是一款基于 ASM 字节码生成的高性能代理框架。
+但是，它通过“继承目标类＋重写目标方法”的方式，在运行时动态生成一个子类来完成代理。因此代理对象与实例对象不是JDK代理中的平级关系。
+
+
+## 1. 纯反射实现：`method.invoke`
+在深入 CGLIB 之前，我们先来看一下最原始的“纯反射”版本，理解它的优缺点。
+
+首先定义一个很简单的目标类 `Target`，它有三个重载的 `save` 方法：无参、有一个 `int`、有一个 `long`。  
+拦截器`MethodInterceptor`我们就i直接使用CGLIB给我们提供的实现，它在每次代理方法被调用时都会被触发。
+
 ```java
 public class Target {
-
-    public void save() {
-        System.out.println("save()");
-    }
-
-    public void save(int i) {
-        System.out.println("save(int)");
-    }
-
-    public void save(long l) {
-        System.out.println("save(long)");
-    }
+    public void save() {System.out.println("save()");}
+    public void save(int i) {System.out.println("save(int)");}
+    public void save(long l) {System.out.println("save(long)");}
 }
 ```
+由于CGLIB代理类是目标类的子类，所以我们需要代理类去继承目标类。另外有三个注意的点：
+1. 我们在静态代码块中初始化`Target.class.getMethod(...)`得到的`Method`对象，避免每次调用时都做一次高成本的反射查找
+2. 在`save()`、`save(int)`、`save(long)`中，只做一件事：把当前代理实例、`Method`对象和参数数组，交给`MethodInterceptor`
+3. `inteceptor.intercept()`方法的第四个参数是`methodProxy`，这个参数目前先不管，传入`null`
 ```java
 public class $Proxy0 extends Target{
 
     private MethodInterceptor interceptor;
-    public void setMethodInterceptor(MethodInterceptor interceptor) {
-        this.interceptor = interceptor;
-    }
+    public void setMethodInterceptor(MethodInterceptor interceptor) {this.interceptor = interceptor;}
 
+    // 1. 初始化三个重载 save 方法的 Method 对象
     static Method save0;
     static Method save1;
     static Method save2;
@@ -47,6 +51,7 @@ public class $Proxy0 extends Target{
         }
     }
 
+    // 2. 重写无参 save，所有逻辑都交给 interceptor
     @Override
     public void save() {
         try {
@@ -59,6 +64,7 @@ public class $Proxy0 extends Target{
     @Override
     public void save(int i) {
         try {
+            // 3. methodProxy传入null
             interceptor.intercept(this, save1, new Object[]{i}, null);
         } catch (Throwable e) {
             throw new UndeclaredThrowableException(e);
@@ -75,23 +81,24 @@ public class $Proxy0 extends Target{
     }
 }
 ```
+我们写一个测试来看看代理类的行为：
 ```java
-public class TestProxy {
+public static void main(String[] args) {
+    $Proxy0 proxy = new $Proxy0();
+    Target target = new Target();
+    proxy.setMethodInterceptor((o, method, params,methodProxy) -> {
+        System.out.println("before...");
+        return method.invoke(target, params); // 反射调用
+    });
 
-    public static void main(String[] args) {
-        $Proxy0 proxy = new $Proxy0();
-        Target target = new Target();
-        proxy.setMethodInterceptor((o, method, params,methodProxy) -> {
-            System.out.println("before...");
-            return method.invoke(target, params); // 反射调用
-        });
-
-        proxy.save();
-        proxy.save(1);
-        proxy.save(2L);
-    }
+    proxy.save();
+    proxy.save(1);
+    proxy.save(2L);
 }
 ```
+总结一下调用链：
+`proxy.save()` → 进入代理类的重写方法 → 调用拦截器`interceptor.intercept()` → 拦截器执行前置打印后反射调用方法
+
 
 ## 2. `methodProxy`
 
@@ -274,6 +281,54 @@ public Object invoke(int index, Object proxy, Object[] args) {
             return null;
         }
         default -> throw new NoSuchMethodError("No such method!");
+    }
+}
+```
+我们看一下目前为止的代码
+```java
+public class ProxyFastClass {
+
+    static Signature signature0 = new Signature("saveOriginal", "()V");
+    static Signature signature1 = new Signature("saveOriginal", "(I)V");
+    static Signature signature2 = new Signature("saveOriginal", "(J)V");
+
+    /**
+     * 获取代理方法的编号
+     * Proxy
+     *     save()        0
+     *     save(int)     1
+     *     save(long)    2
+     * @param signature 方法签名，包含方法名，方法参数和方法返回类型
+     * @return 方法编号
+     */
+    public int getIndex(Signature signature) {
+        if (signature.equals(signature0)) {
+            return 0;
+        } else if (signature.equals(signature1)) {
+            return 1;
+        } else if (signature.equals(signature2)) {
+            return 2;
+        } else {
+            return -1;
+        }
+    }
+
+    public Object invoke(int index, Object proxy, Object[] args) {
+        return switch (index) {
+            case 0 -> {
+                (($Proxy0) proxy).saveOrigin();
+                yield null;
+            }
+            case 1 -> {
+                (($Proxy0) proxy).saveOrigin((int) args[0]);
+                yield null;
+            }
+            case 2 -> {
+                (($Proxy0) proxy).saveOrigin((long) args[0]);
+                yield null;
+            }
+            default -> throw new NoSuchMethodError("No such method!");
+        };
     }
 }
 ```
