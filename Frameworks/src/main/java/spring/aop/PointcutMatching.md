@@ -1,5 +1,9 @@
 # 切点匹配
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 1. 两种切点匹配模式
 我们经常这样装配我们的AOP：
 ```java
