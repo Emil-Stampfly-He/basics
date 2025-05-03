@@ -154,7 +154,7 @@ public class SpringSelectiveProxy {
    1. `createProxy()`首先激活`AdvisedSupportListener`监听切面消息，再调用`ProxyCreatorSupport`中的`getAopProxyFactory()`
    2. `getAopProxyFactory()`会调用`DefaultAopProxyFactory`的`createAopProxy(AdvisedSupport config)`对AOP工厂种类进行指定
       * `proxyTargetClass = false` && 目标实现接口：`JDKDynamicAopFactory`
-      * `proxyTargetClass = false` && 目标未实现接口 `ObjenesisCglibAopFactory`
+      * `proxyTargetClass = false` && 目标未实现接口：`ObjenesisCglibAopFactory`
       * `proxyTargetClass = true`：`ObjenesisCglibAopFactory`
 3. 指定的AOP工厂返回给`createAopProxy()`后，调用该AOP工厂下的`getProxy()`方法，这个方法会调用`Proxy.newProxyInstance()`生成一个代理对象
    * `JDKDynamicAopFactory`会生成一个JDK代理对象
