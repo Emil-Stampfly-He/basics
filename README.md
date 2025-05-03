@@ -2,7 +2,6 @@
 
 ![Lines of Code](https://img.shields.io/endpoint?url=https://Emil-Stampfly-He.github.io/basics/badge.json)
 
-
 ## 一、Java核心语言特性
 ### 1. 基本类型与包装类型
 * 自动装箱/拆箱陷阱
@@ -11,7 +10,7 @@
 * 类型擦除机制
 ### 3. 反射 & 动态代理
 * `Class.forName()` / `newInstance()`
-* [JDK动态代理 vs CGLIB代理原理]
+* JDK动态代理 vs CGLIB代理原理
   * [JDK动态代理](Core/src/main/java/proxy/jdk/JDKDynamicProxy.md)
   * [CGLIB动态代理](Core/src/main/java/proxy/cglib/CGLIBDynamicProxy.md)
 ### 4. 注解处理
@@ -42,3 +41,11 @@
 * 标记-清除／标记-整理／分代收集
 ### 3. JVM参数调优
 * `Xmx`、`Xms`、GC日志解析
+
+## 四、框架
+### 1. Spring
+#### 1.1 AOP
+* 动态代理
+  * [JDK动态代理](Core/src/main/java/proxy/jdk/JDKDynamicProxy.md)
+  * [CGLIB动态代理](Core/src/main/java/proxy/cglib/CGLIBDynamicProxy.md)
+  * [Spring选择代理](Core/src/main/java/proxy/selective_proxy/SpringSelectiveProxy.md)
