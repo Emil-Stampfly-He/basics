@@ -154,7 +154,39 @@ advisors.forEach(System.out::println);
 
 
 ### 2.3. `wrapIfNecessary()`
-
-
-
+`wrapIfNecessary()`的内部调用了`findEligibleAdvisors()`，只要返回集合不为空，则表示需要创建代理对象。
+```java
+public static void main(String[] args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+    /*...*/
+    /* wrapIfNecessary */
+    Method wrapIfNecessary = creator.getClass()
+            .getSuperclass()
+            .getSuperclass()
+            .getSuperclass()
+            .getDeclaredMethod("wrapIfNecessary", Object.class, String.class, Object.class);
+    wrapIfNecessary.setAccessible(true);
+    // 最后一个字符串参数不重要，我们可以随意指定
+    Object o1 = wrapIfNecessary.invoke(creator, new Target1(), "target1", "target1");
+    Object o2 = wrapIfNecessary.invoke(creator, new Target2(), "target2", "target2");
+    System.out.println(o1.getClass());
+    System.out.println(o2.getClass());
+}
+```
+由于`Target1`中有匹配的方法而`Target2`中没有，所以我们预计`Target1`会被创建代理对象而`Target2`不会。打印结果如下：
+```aiignore
+class spring.aop.AdvisorAndAspect$Target1$$SpringCGLIB$$0
+class spring.aop.AdvisorAndAspect$Target2
+```
+结果符合我们的预期。`Target1`被代理，生成的`o1`即为其代理对象。我们可以调用一下它的方法，看看其是否被增强：
+```java
+((Target1) o1).foo();
+```
+```aiignore
+advice3 before... 
+aspect1 before...
+target1 foo
+aspect1 after...
+advice3 after...
+```
+一共被增强三次：高级切面中的前置和后置增强、低级切面中的环绕增强。
 

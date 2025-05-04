@@ -49,6 +49,22 @@ public class AdvisorAndAspect {
         findEligibleAdvisors.setAccessible(true);
         List<Advisor> advisors = (List<Advisor>) findEligibleAdvisors.invoke(creator, Target2.class, "target2");
         advisors.forEach(System.out::println);
+
+        System.out.println();
+
+        /* wrapIfNecessary */
+        Method wrapIfNecessary = creator.getClass()
+                .getSuperclass()
+                .getSuperclass()
+                .getSuperclass()
+                .getDeclaredMethod("wrapIfNecessary", Object.class, String.class, Object.class);
+        wrapIfNecessary.setAccessible(true);
+        Object o1 = wrapIfNecessary.invoke(creator, new Target1(), "target1", "target1");
+        Object o2 = wrapIfNecessary.invoke(creator, new Target2(), "target2", "target2");
+        System.out.println(o1.getClass());
+        System.out.println(o2.getClass());
+
+        ((Target1) o1).foo();
     }
 
     static class Target1 {
