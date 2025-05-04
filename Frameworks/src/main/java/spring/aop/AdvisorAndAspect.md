@@ -1,38 +1,32 @@
-# `@Aspect` vs Advisor
+# 高级切面与低级切面（`@Aspect` vs Advisor）
 
-## 1. 准备工作
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
+## 1. 回顾：`@Aspect`与advisor
+我们先准备好一个高级切面和一个低级切面。一个高级切面用`@Aspect`注解表示；一个低级切面由一个pointcut和一个advice组成：
 ```java
 public class AdvisorAndAspect {
-    public static void main(String[] args) {
-        GenericApplicationContext context = new GenericApplicationContext();
-        context.registerBean("aspect1", Aspect1.class);
-        context.registerBean("config", Config.class);
-        context.registerBean(ConfigurationClassPostProcessor.class);
-        context.refresh();
-        
-        for (String name : context.getBeanDefinitionNames()) {
-            System.out.println(name);
-        }
-    }
-
-    static class Target1 { public void foo() {System.out.println("target1 foo");}}
+    static class Target1 {public void foo() {System.out.println("target1 foo");}}
     static class Target2 { public void bar() {System.out.println("target2 bar");}}
 
-    @Aspect
+    @Aspect // 高级切面（aspect）
     static class Aspect1 {
         @Before("execution(* foo())")
         public void before() {
             System.out.println("aspect1 before...");
         }
+
         @After("execution(* foo())")
         public void after() {
             System.out.println("aspect1 after...");
         }
     }
 
-    @Configuration
-    static class Config { // 低级切面
-        @Bean // advice需要作为bean传入
+    @Configuration // 低级切面（advisor），需要使用@Configuraion注解
+    static class Config {
+        @Bean // advice3需要作为bean传入
         public Advisor advisor3(MethodInterceptor advice3) {
             AspectJExpressionPointcut pointcut = new AspectJExpressionPointcut();
             pointcut.setExpression("execution(* foo());");
@@ -51,6 +45,24 @@ public class AdvisorAndAspect {
     }
 }
 ```
+然后我们手动创建一个bean容器并将这些bean放到这个容器中：
+
+```java
+public class AdvisorAndAspect {
+    public static void main(String[] args) {
+        GenericApplicationContext context = new GenericApplicationContext(); // bean容器
+        context.registerBean("aspect1", Aspect1.class);
+        context.registerBean("config", Config.class);
+        context.registerBean(ConfigurationClassPostProcessor.class); // 
+        context.refresh();
+        
+        for (String name : context.getBeanDefinitionNames()) {
+            System.out.println(name);
+        }
+    }
+    /*...*/
+}
+```
 输出结果如下：
 ```aiignore
 aspect1
@@ -59,10 +71,24 @@ org.springframework.context.annotation.ConfigurationClassPostProcessor
 advisor3
 advice3
 ```
-可以看到，容器将低级切面分别解析出了advisor和通知。
+第一行
+可以看到，容器不仅将低级切面`Config`注册成了一个bean，还将低级切面拆开，分别解析出了advisor和通知的bean。
 
 ## 2. `AnnotationAwareAspectJAutoProxyCreator`
-两个非常重要的方法：
+
+### 2.1. 简介
+每当使用切面时，我们从来不需要关心代理对象时怎么来的，因为Spring帮我们已经创建好了。那么“黑盒子”底下到底是谁在发挥作用？
+主角便是`AnnotationAwareAspectJAutoProxyCreator`。`AnnotationAwareAspectJAutoProxyCreator`是一个bean后处理器（它实现了`BeanPostProcessor`接口），
+它可以找到容器中所有的切面，包括高级与低级切面。找到后，如果是高级切面，则会将高级切面转换成低级切面。最后根据这些切面创建代理对象。这两点功能也可以从它的名字中解读出来：
+`AnnotationAware` + `AutoProxyCreator`。
+
+`AnnotationAwareAspectJAutoProxyCreator`自己本身作为一个bean，会在两个时间点发挥作用：依赖注入前与初始化后（*为发挥作用时间点）：
+```aiignore
+Bean的生命周期：
+创建 ->（*）依赖注入 -> 初始化（*）-> ...
+```
+
+`AnnotationAwareAspectJAutoProxyCreator`继承了两个非常重要的方法：
 1. `findEligibleAdvisors()` \
 该方法继承自`AbstractAdvisorAutoProxyCreator`，用于寻找“有资格”的低级切面（advisors）并将它们加入到一个集合中。高级切面会先被解析成低级切面（advisor）之后加入其中。
 2. `wrapIfNecessary()` \
@@ -70,17 +96,39 @@ advice3
    * 目标类确实有匹配的切面
    * 如果目标类根本没有匹配的切面，则不创建代理
 
-由于这两个方法都是`protected`，所以下面我们使用反射调用：
+### 2.2. `findEligibleAdvisors()`
+由于该方法都是`protected`，所以下面我们使用反射调用：
 ```java
-AnnotationAwareAspectJAutoProxyCreator creator = context.getBean(AnnotationAwareAspectJAutoProxyCreator.class);
-Method findEligibleAdvisors = creator
-        .getClass()
-        .getSuperclass()
-        .getSuperclass()
-        .getDeclaredMethod("findEligibleAdvisors",Class.class, String.class);
-findEligibleAdvisors.setAccessible(true);
-List<Advisor> advisors = (List<Advisor>) findEligibleAdvisors.invoke(creator, Target1.class, "target1");
-advisors.forEach(System.out::println);
+public static void main(String[] args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+    GenericApplicationContext context = new GenericApplicationContext();
+    context.registerBean("aspect1", Aspect1.class);
+    context.registerBean("config", Config.class);
+    context.registerBean(ConfigurationClassPostProcessor.class);
+
+    // 能识别高级切面中的注解，例如@Aspect，@Before
+    // 能根据收集的切面自动创建代理
+    context.registerBean(AnnotationAwareAspectJAutoProxyCreator.class);
+    // AnnotationAwareAspectJAutoProxyCreator实现了BeanPostProcessor接口
+    // 创建 ->（*）依赖注入 -> 初始化（*）
+
+    context.refresh();
+    for (String name : context.getBeanDefinitionNames()) {
+        System.out.println(name);
+    }
+
+    System.out.println();
+
+    /* findEligibleAdvisors() */
+    AnnotationAwareAspectJAutoProxyCreator creator = context.getBean(AnnotationAwareAspectJAutoProxyCreator.class);
+    Method findEligibleAdvisors = creator
+            .getClass()
+            .getSuperclass()
+            .getSuperclass()
+            .getDeclaredMethod("findEligibleAdvisors",Class.class, String.class);
+    findEligibleAdvisors.setAccessible(true);
+    List<Advisor> advisors = (List<Advisor>) findEligibleAdvisors.invoke(creator, Target2.class, "target2");
+    advisors.forEach(System.out::println);
+}
 ```
 我们查看一下打印结果：
 ```aiignore
@@ -103,6 +151,10 @@ List<Advisor> advisors = (List<Advisor>) findEligibleAdvisors.invoke(creator, Ta
 advisors.forEach(System.out::println);
 ```
 打印结果自然是什么都没有，因为没有任何切面产生。
+
+
+### 2.3. `wrapIfNecessary()`
+
 
 
 
