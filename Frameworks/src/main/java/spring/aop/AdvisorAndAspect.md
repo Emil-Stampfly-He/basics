@@ -85,7 +85,7 @@ advice3
 `AnnotationAwareAspectJAutoProxyCreator`自己本身作为一个bean，会在两个时间点发挥作用：依赖注入前与初始化后（*为发挥作用时间点）：
 ```aiignore
 Bean的生命周期：
-创建 ->（*）依赖注入 -> 初始化（*）-> ...
+创建bean实例 ->（*）依赖注入 -> 初始化（*）-> ...
 ```
 
 `AnnotationAwareAspectJAutoProxyCreator`继承了两个非常重要的方法：
@@ -190,3 +190,171 @@ advice3 after...
 ```
 一共被增强三次：高级切面中的前置和后置增强、低级切面中的环绕增强。
 
+
+## 3. 高级切面转换为低级切面
+为了研究清楚`findEligible`的实现逻辑，我们现在来手动实现一下它所能实现的功能。
+我们首先准备一个高级切面，里面有两个前置通知，针对的是`Target`中的`foo`方法：
+```java
+public class AspectToAdvisor {
+    static class Aspect {
+        @Before("execution(* foo())") public void before1() {System.out.println("before1");}
+        @Before("execution(* foo())") public void before2() {System.out.println("before2");}
+//        public void after() {System.out.println("after");}
+//        public void afterReturning() {System.out.println("afterReturning");}
+//        public void afterThrowing() {System.out.println("afterThrowing");}
+//        public Object around(ProceedingJoinPoint pjp) throws Throwable {
+//            System.out.println("around before");
+//            Object result = pjp.proceed();
+//            System.out.println("around after");
+//            return result;
+//        }
+        // 目标类
+        static class Target { public void foo() {System.out.println("Target foo");}}
+    }
+}
+```
+当然，Spring AOP中提供的通知注解不止`@Before`一种，还有`@After`、`@Around`、`@After`等。这里我们暂时先用`@Before`举例。
+
+为了将高级切面拆解为低级切面，我们整体的思路是这样的：
+1. 反射地获取切面类中所有带有`@Before`注解的方法
+2. 通过`@Before`中的值获取切点
+3. 创建通知（advice）：因为是前置通知，所以使用`AspectJMethodBeforeAdvice`。
+   * 如果是别的通知类型，可以使用其他名称相似的类
+     * `AspectJAroundAdvice`
+     * `AspectJAfterReturningAdvice`
+     * `AspectJAfterThrowingAdvice`
+     * `AspectJAfterAdvice`
+4. 将切点与通知组合成低级切面（advisor）
+5. 最后将这些低级切面放到一个集合中
+```java
+public static void main(String[] args) {
+    AspectInstanceFactory factory = new SingletonAspectInstanceFactory(new Aspect());
+    List<Advisor> list = new ArrayList<>();
+    for (Method method: Aspect.class.getDeclaredMethods()) {
+        if (method.isAnnotationPresent(Before.class)) {
+            // 解析切点
+            Before before = method.getAnnotation(Before.class);
+            assert before != null;
+            String pointcutExpression = before.value();
+            AspectJExpressionPointcut pointcut = new AspectJExpressionPointcut();
+            pointcut.setExpression(pointcutExpression);
+            // 通知类，需要传入一个切面实例工厂，作用是创建一个切面实例对象（光有方法method没用，将来要调用的话必须有一个实例来调用）
+            AspectJMethodBeforeAdvice beforeAdvice = new AspectJMethodBeforeAdvice(method, pointcut, factory);
+            // advisor：切点 + 通知
+            Advisor advisor = new DefaultPointcutAdvisor(pointcut, beforeAdvice);
+            list.add(advisor);
+        }
+    }
+    list.forEach(System.out::println);
+}
+```
+输出结果如下。我们可以看到，一个`Aspect`高级切面类确实被解析成了两个低级的切面：
+```aiignore
+org.springframework.aop.support.DefaultPointcutAdvisor: pointcut [AspectJExpressionPointcut: () execution(* foo())]; advice [org.springframework.aop.aspectj.AspectJMethodBeforeAdvice: advice method [public void spring.aop.AspectToAdvisor$Aspect.before1()]; aspect name '']
+org.springframework.aop.support.DefaultPointcutAdvisor: pointcut [AspectJExpressionPointcut: () execution(* foo())]; advice [org.springframework.aop.aspectj.AspectJMethodBeforeAdvice: advice method [public void spring.aop.AspectToAdvisor$Aspect.before2()]; aspect name '']
+```
+
+
+## 4. 代理对象创建时机
+
+回顾一下上一节的内容：
+>`AnnotationAwareAspectJAutoProxyCreator`自己本身作为一个bean，会在两个时间点发挥作用：依赖注入前与初始化后（*为发挥作用时间点）：
+>```aiignore
+>Bean的生命周期：
+>创建bean实例 ->（*）依赖注入 -> 初始化（*）-> ...
+>```
+必须注意的是，两个发挥作用时间点是二选一的，不会重复创建代理对象。那么，什么时候代理发生在依赖注入之前，什么时候发生在初始化之后呢？
+
+### 4.1. Bean之间是单向依赖关系
+我们创建两个Bean：`Bean1`单向地依赖`Bean2`。中间注入的一些Bean是一些为切面生成代理以及依赖注入的必要配置。
+```java
+public class ProxyConstructTiming {
+    public static void main(String[] args) {
+        GenericApplicationContext context = new GenericApplicationContext();
+        context.registerBean(ConfigurationClassPostProcessor.class);
+        context.registerBean(Config.class);
+        context.refresh();
+        context.close();
+        // 创建 →（*）依赖注入 → 初始化（*）
+    }
+
+    @Configuration
+    static class Config {
+        @Bean // 解析@Aspect，自动生成代理
+        public AnnotationAwareAspectJAutoProxyCreator annotationAwareAspectJAutoProxyCreator() {
+            return new AnnotationAwareAspectJAutoProxyCreator();
+        }
+        @Bean // 解析@Autowired
+        public AutowiredAnnotationBeanPostProcessor autowiredAnnotationBeanPostProcessor() {
+            return new  AutowiredAnnotationBeanPostProcessor();
+        }
+        @Bean // 解析@PostConstruct
+        public CommonAnnotationBeanPostProcessor commonAnnotationBeanPostProcessor() {
+            return new  CommonAnnotationBeanPostProcessor();
+        }
+        @Bean
+        public Advisor advisor(MethodInterceptor advice) {
+            AspectJExpressionPointcut pointcut = new AspectJExpressionPointcut();
+            pointcut.setExpression("execution(* foo())");
+            return new DefaultPointcutAdvisor(pointcut, advice);
+        }
+        @Bean
+        public MethodInterceptor advice() {
+            return invocation -> {
+                System.out.println("before...");
+                return invocation.proceed();
+            };
+        }
+        @Bean
+        public Bean1 bean1() { return new Bean1(); }
+        @Bean
+        public Bean2 bean2() { return new Bean2(); }
+    }
+
+    static class Bean1 {
+        public void foo() {}
+        public Bean1() {System.out.println("Bean1()");}
+        @PostConstruct public void init() {System.out.println("Bean1 init()");}
+    }
+
+    static class Bean2 {
+        public Bean2() {System.out.println("Bean2()");}
+        @Autowired public void setBean1(Bean1 bean1) {
+            System.out.println("Bean2 setBean1(bean1) class is: " + bean1.getClass().getName()");
+        }
+        @PostConstruct public void init() {System.out.println("Bean2 init()");}
+    }
+}
+```
+我们打印，可以看到“创建CGLIB代理对象”的日志在`Bean1 init()`后才出现，这说明代理对象是在Bean初始化之后创建的。
+
+### 4.2. Bean之间是循环依赖关系
+我们现在调整一下依赖关系：让`Bean1`和`Bean2`互相依赖彼此：
+```java
+static class Bean1 {
+    public void foo() {}
+    public Bean1() {System.out.println("Bean1()");}
+    @Autowired public void setBean2(Bean2 bean2) {
+        System.out.println("Bean1 setBean2(bean2) class is: " + bean2.getClass().getName());
+    }
+    @PostConstruct public void init() {System.out.println("Bean1 init()");}
+}
+
+static class Bean2 {
+    public Bean2() {System.out.println("Bean2()");}
+    @Autowired public void setBean1(Bean1 bean1) {
+        System.out.println("Bean2 setBean1(bean1) class is: " + bean1.getClass().getName());
+    }
+    @PostConstruct public void init() {System.out.println("Bean2 init()");}
+}
+```
+打印之后，可以发现`Bean1`被创建了一个CGLIB代理对象，而`Bean2`没有。这一点很好理解，因为没有任何切点匹配上了`Bean2`里面的任何方法。
+
+我们还能看到“创建CGLIB代理对象”的日志在`Bean1 init()`前就出现了。对此，一个直观的解释是：由于`Bean1`中的功能被增强，所以`Bean2`需要注入一个拥有增强方法的`Bean1`，因此`Bean1`必须提前被代理增强。
+然后`Bean2`的注入完成，就可以接着继续完成初始化了。接着，`Bean1`开始接受`Bean2`的注入，并进行初始化。
+
+**总而言之：如果发生循环依赖，则代理会被提前，因为依赖方需要被增强的被依赖方。如果不存在循环依赖关系，则代理发生在初始化后。**
+> 补充：源码调用链 
+> 
+> 在`AbstractAutowireCapableBeanFactory`中有一个`doCreateBean()`方法和一个`allowCircularReference`字段。这个字段顾名思义是用来判断循环依赖是否存在的。
+> 如果当前的bean是单例bean且`allowCircularReference`字段为`true`，那么`doCreateBean()`方法就会调用`getEarlyBeanReference()`方法，也就是提前进行代理（也就是提前调用`wrapIfNecessary()`）。
