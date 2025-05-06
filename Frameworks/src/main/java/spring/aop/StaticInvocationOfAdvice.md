@@ -1,4 +1,4 @@
-# 静态调用通知
+# 静态通知调用
 
 ## 1. 统一转换为环绕通知
 我们知道可以使用一些注解来表示通知：`@Before`、`@After`、`@Around`等等。这些注解对应的通知类为：
@@ -35,7 +35,7 @@ after1------------------------------------------|
 另外两个没有实现，因此需要被转换。
 
 ## 2. 通知的转换：`getInterceptorsAndDynamicInterceptionAdvice`
-接下来我们来看一看通知的转换。我们先准备如下代码：（对这一部分不熟的话可以参考[高级切面与低级切面（`@Aspect` vs Advisor）](https://github.com/Emil-Stampfly-He/basics/blob/333a7b5e1b82456b3aa83a57470c37f57f24dcf2/Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)
+接下来我们来看一看通知的转换。我们先准备如下代码：（对这一部分不熟的话可以参考[高级切面与低级切面（`@Aspect` vs Advisor）](https://github.com/Emil-Stampfly-He/basics/blob/333a7b5e1b82456b3aa83a57470c37f57f24dcf2/Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)）
 > 注意：我们省去了对advisor排序的步骤。在实际中运用中我们是可以指定切面顺序的。这里为了简便所以省去。
 
 ```java
@@ -118,7 +118,7 @@ public class AspectToAdvisor {
     }
 }
 ```
-在第2步中，我们创建了一个代理工厂，让它生成目标类的代理对象：（不熟悉的可以参考[Spring选择代理](https://github.com/Emil-Stampfly-He/basics/blob/af13cf62267557f2f7bcf6ad50b47a2b9ec9d4f1/Core/src/main/java/proxy/selective_proxy/SpringSelectiveProxy.md)
+在第2步中，我们创建了一个代理工厂，让它生成目标类的代理对象：（不熟悉的可以参考[Spring选择代理](https://github.com/Emil-Stampfly-He/basics/blob/af13cf62267557f2f7bcf6ad50b47a2b9ec9d4f1/Core/src/main/java/proxy/selective_proxy/SpringSelectiveProxy.md)）
 ```java
 // 2. 通知统一转换为环绕通知MethodInterceptor
 ProxyFactory proxyFactory = new ProxyFactory();
@@ -227,9 +227,9 @@ Exception in thread "main" java.lang.IllegalStateException: No MethodInvocation 
 * 找不到`MethodInvocation`这个调用链
 * `ExposeInvocationInterceptor`必须在最前面
 
-首先，很奇怪的一点是，我们已经创建了调用链，为什么说“找不到”？我们看看`proceed`方法里面到底发生了什么：`proceed`方法内部最重要的一个步骤是调用`AbstractAspectJAdvice`中的`getJoinPointMatch`方法。
-而这个方法会去寻找`ExposeInvocationInterceptor.currentInvocation()`中是否有调用链。`ExposeInvocationInterceptor`这个类顾名思义是“暴露”调用链的，本质上是管理了一个`ThreadLocal`并把调用链放入这个`ThreadLocal`中。
-既然我们没有创建一个`ExposeInvocationInterceptor`实例，也就是说`ThreadLocal`根本不存在，切面无法找到调用链，所以就抛出了这个异常。
+首先，很奇怪的一点是，我们已经创建了调用链，为什么说“找不到”？我们看看`proceed`方法里面到底发生了什么：`proceed`方法内部会调用到`AbstractAspectJAdvice`中的`getJoinPointMatch`方法。
+而这个方法会去寻找`ExposeInvocationInterceptor.currentInvocation()`中是否有调用链。`ExposeInvocationInterceptor`这个类顾名思义是“暴露”调用链的一个通知（拦截器，advice的本质就是拦截器），它管理了一个`ThreadLocal`并把调用链放入这个`ThreadLocal`中。
+既然我们没有创建一个`ExposeInvocationInterceptor`实例，也就是说`ThreadLocal`根本不存在，其他通知（`advice1`和`advice2`）无法找到调用链，所以就抛出了这个异常。
 
 其次，还记得在[高级切面与低级切面（`@Aspect` vs Advisor）](https://github.com/Emil-Stampfly-He/basics/blob/215fd9f2e605ad34274d5f235586dd4fd78f6046/Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)第2.2节中的打印结果吗：
 ```aiignore
@@ -237,7 +237,7 @@ org.springframework.aop.interceptor.ExposeInvocationInterceptor.ADVISOR
 ```
 我们明明只是定义了一个高级切面（内含两个低级切面）加一个低级切面，可是`AnnotationAwareAspectJAutoProxyCreator`却给我们格外创建了一个`ExposeInvocationInterceptor.ADVISOR`的切面。
 
-结合这两点来看，这表明，要想让所有切面拿到同一个`ThreadLocal`中的调用链，我们必须默认地给所有切面外加一个最大的切面`ADVICE`，这个切面功能是维护了一个`ThreadLocal`并把调用链放入其中，以便所有切面都能拿到同一个调用链——这也就是`ExposeInvocationInterceptor`所做的：
+结合这两点来看，这表明，要想让所有切面拿到同一个`ThreadLocal`中的调用链，我们必须默认地给所有切面外加一个最大的切面`ADVISOR`，这个切面功能是维护了一个`ThreadLocal`并把调用链放入其中，以便所有切面都能拿到同一个调用链——这也就是`ExposeInvocationInterceptor`所做的：
 ```aiignore
 ---------------------------------------------------------------------------
                                                                           |
@@ -245,7 +245,7 @@ org.springframework.aop.interceptor.ExposeInvocationInterceptor.ADVISOR
                                                     |                     |
         before2-------------------------            |                     |
                                        |            |                     |
-            target -------- 目标     advice2      advice1    ExposeInvocationInterceptor
+            target -------- 目标     advice2      advice1  (ExposeInvocationInterceptor.ADVISOR)
                                        |            |                   ADVICE
                                        |            |                     |
         after2--------------------------            |                     |
@@ -273,3 +273,56 @@ afterReturning
 确实是层状调用的模式。当然，我们这里忽略了通知调用的顺序。如果要指定顺序，需要将每个通知都放入一个高级切面类并使用`@Order`进行顺序的指定，这里不再展开。
 
 ## 5. `proceed`责任链模式
+最后我们来看看启动调用链的方法`proceed`，它的内部使用了递归。以下是分步骤解析：（由于还没有谈到动态匹配器，所以相关的逻辑我们先跳过）
+```java
+// ReflectiveMethodInvocation.java
+@Override
+@Nullable
+public Object proceed() throws Throwable {
+    // 1. 如果拦截器（通知）已经递归地调用完毕，则直接调用目标方法（我们讲的是target，这里用joinpoint表示）
+    // 结束递归
+    if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
+        return invokeJoinpoint();
+    }
+
+    // 2. 否则，取下一个拦截器或动态匹配器（我们先不管什么是动态匹配器）
+    Object interceptorOrInterceptionAdvice =
+            this.interceptorsAndDynamicMethodMatchers.get(++this.currentInterceptorIndex);
+    // 3. 如果是动态匹配器，运行下面的逻辑（动态匹配器的部分我们跳过）
+    if (/*...*/) {
+        /*...*/
+    }
+    // 4. 如果是拦截器（通知），则调用invoke方法
+    else {
+        return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
+    }
+}
+```
+这里看上去没有使用到递归，但是我们仔细思考一下，通知是这样被定义的：
+```java
+public MethodInterceptor advice1() {
+    return invocation -> {
+        System.out.println("advice1 before... ");
+        Object result = invocation.proceed();
+        System.out.println("advice1 after...");
+        return result;
+    };
+}
+```
+所以：（下面忽略了最外层的`ExposeInvocationInterceptor.ADVISOR`）
+* 拦截器（通知）调用`invoke(this)`，方法会返回到`advice1`中，而`advice1`会继续调用`proceed`
+* 如果`advice1`中还有`advice2`，那么`proceed`方法继续调用`invoke(this)`, 方法返回到`advice2`中再调用`proceed`
+* 如果`advice2`后就是目标方法了，那就调用目标方法，再一层层返回：`advice2` → `advice1`
+
+为什么说这是责任链模式：
+
+  | 责任链模式要素               | 在 Spring AOP 中的实现                                                     |
+  | --------------------- | --------------------------------------------------------------------------- |
+  | 抽象处理者 `Handler`         | `org.aopalliance.intercept.MethodInterceptor`                               |
+  | 具体处理者 `ConcreteHandler` | 不同类型的 Advice（`BeforeAdviceInterceptor`、`AfterReturningAdviceInterceptor`、环绕增强等） |
+  | 请求 `Request`            | `ReflectiveMethodInvocation` 对象本身（包含 `method`、`args`、`target` 等）        |
+  | 链上节点 `Chain`            | `interceptorsAndDynamicMethodMatchers` 列表                                   |
+  | 传递逻辑                  | `proceed()` 方法                                                              |
+
+
+到此，静态通知调用就讲解完毕了。

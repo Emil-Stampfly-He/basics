@@ -52,5 +52,5 @@
 * [切点匹配](Frameworks/src/main/java/spring/aop/PointcutMatching.md)
 * [高级切面与低级切面](Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)
 * 通知调用
-  * [静态调用通知](Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)
-  * [动态调用通知]()
+  * [静态通知调用](Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)
+  * [动态通知调用]()
