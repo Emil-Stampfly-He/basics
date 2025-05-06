@@ -138,7 +138,7 @@ InstantiationModelAwarePointcutAdvisor: expression [execution(* foo())]; advice 
 InstantiationModelAwarePointcutAdvisor: expression [execution(* foo())]; advice method [public void spring.aop.AdvisorAndAspect$Aspect1.after()]; perClauseKind=SINGLETON
 ```
 这说明`creator`一共创造了4个切面，我们逐一解读：
-* 第一个切面是Spring给将来所有代理都加入的切面，我们后面会详细讲解
+* 第一个切面是Spring给将来所有代理都加入的切面，在会详细讲解
 * 剩下3个切面都是我们自己写的
   * `DefaultPointcutAdvisor`：我们自己写的低级切面
   * 另外两个是高级切面（aspect）转换后的低级切面（advisor）
