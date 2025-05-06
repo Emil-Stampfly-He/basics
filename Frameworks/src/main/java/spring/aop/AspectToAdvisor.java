@@ -146,7 +146,6 @@ public class AspectToAdvisor {
         // 只有这样才能通知才能找到调用链
         // 这个本质上也还是一个环绕通知，只不过是最外层的环绕通知
         // ExposeInvocationInterceptor，本质上使用的是ThreadLocal
-        methodInvocation.proceed();
-
+        methodInvocation.proceed(); // 内部使用递归
     }
 }

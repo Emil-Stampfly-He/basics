@@ -51,4 +51,6 @@
   * [Spring选择代理](Core/src/main/java/proxy/selective_proxy/SpringSelectiveProxy.md)
 * [切点匹配](Frameworks/src/main/java/spring/aop/PointcutMatching.md)
 * [高级切面与低级切面](Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)
-* [静态调用通知](Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)
+* 通知调用
+  * [静态调用通知](Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)
+  * [动态调用通知]()

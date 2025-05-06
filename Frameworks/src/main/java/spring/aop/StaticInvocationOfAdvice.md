@@ -8,7 +8,7 @@
 * `AspectJAfterThrowingAdvice`
 * `AspectJAfterAdvice`
 
-但最后它们都会统一被转换为`MethodInterceptor`。回顾之前的笔记，我们已经知道，`MethodInterceptor`是我们之前用来实现advice的类（通知类），
+但最后它们都会统一被转换为`MethodInterceptor`。回顾之前的笔记，我们已经知道，`MethodInterceptor`是我们之前用来实现advice的类（回顾：一个通知本质上是一个拦截器），
 在这个类中我们可以实现任何增强方法的逻辑。这就是为什么说最后都会被转换为“环绕”通知的原因（并不是说都会被转换为`@Around`，只是说会实现相同的功能）。
 
 为什么我们会需要将所有通知都转换为环绕通知呢？我们来看看有多个advisor的情况：当前置增强开始时，我们肯定希望在目标方法被调用之前执行的全都是前置增强，而不是穿插着后置增强。
@@ -162,3 +162,114 @@ class MethodBeforeAdviceAdapter implements AdvisorAdapter, Serializable {
 ```
 很简单，`supportsAdvice`方法用来判断这个适配器支持哪种通知类，`getInterceptor`用来进行转换。
 
+
+## 4. 调用链执行
+既然我们已经有了这么一些环绕通知，接下来就是创建并执行调用链了。回顾一下我们的调用链：
+```aiignore
+before1-----------------------------------------|
+                                                |
+    before2-------------------------            |
+                                   |            |
+        target -------- 目标     advice2      advice1
+                                   |            |
+    after2--------------------------            |
+                                                |
+after1------------------------------------------|
+```
+我们接着上面的`main`方法创建一个调用链。这里用到`MethodInvocation`下的`ReflectiveMethodInvocation`。另一个选项是`CglibIMethodInvocation`，但是这个类继承了`ReflectiveMethodInvocation`，所以是相似的。
+`ReflectiveMethodInvocation`的构造器是`protected`，这里需要反射地调用构造方法：
+```java
+public static void main(String[] args) throws Throwable {
+    // 1. 高级切面转换为低级切面
+    /*...*/
+    // 2. 通知统一转换为环绕通知MethodInterceptor
+    /*...*/
+    // 3. 统一转换成环绕通知
+    /*...*/
+    
+    // 4. 创建并执行调用链（环绕通知 + 目标）
+    Constructor<ReflectiveMethodInvocation> reflectiveMethodInvocationConstructor = ReflectiveMethodInvocation.class.getDeclaredConstructor(
+            Object.class,
+            Object.class,
+            Method.class,
+            Object[].class,
+            Class.class,
+            List.class
+    );
+    reflectiveMethodInvocationConstructor.setAccessible(true);
+    ReflectiveMethodInvocation methodInvocation = reflectiveMethodInvocationConstructor.newInstance(
+            null,
+            new Aspect.Target(),
+            Aspect.Target.class.getMethod("foo"),
+            new Object[0],
+            Aspect.Target.class,
+            methodInterceptorList
+    );
+
+    // 5. 开始调用
+    methodInvocation.proceed(); // 内部使用递归
+}
+```
+创建完后就可以使用`proceed`方法进行调用了。我们运行：
+```aiignore
+around before
+Exception in thread "main" java.lang.IllegalStateException: No MethodInvocation found: Check that an AOP invocation is in progress and that the ExposeInvocationInterceptor is upfront in the interceptor chain. Specifically, note that advices with order HIGHEST_PRECEDENCE will execute before ExposeInvocationInterceptor! In addition, ExposeInvocationInterceptor and ExposeInvocationInterceptor.currentInvocation() must be invoked from the same thread.
+	at org.springframework.aop.interceptor.ExposeInvocationInterceptor.currentInvocation(ExposeInvocationInterceptor.java:74)
+	at org.springframework.aop.aspectj.AbstractAspectJAdvice.getJoinPointMatch(AbstractAspectJAdvice.java:665)
+	at org.springframework.aop.aspectj.AspectJMethodBeforeAdvice.before(AspectJMethodBeforeAdvice.java:44)
+	at org.springframework.aop.framework.adapter.MethodBeforeAdviceInterceptor.invoke(MethodBeforeAdviceInterceptor.java:57)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:89)
+	at spring.aop.AspectToAdvisor$Aspect.around(AspectToAdvisor.java:49)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+```
+仅仅输出了一个前置增强就抛出了异常。异常的大意是：
+* 找不到`MethodInvocation`这个调用链
+* `ExposeInvocationInterceptor`必须在最前面
+
+首先，很奇怪的一点是，我们已经创建了调用链，为什么说“找不到”？我们看看`proceed`方法里面到底发生了什么：`proceed`方法内部最重要的一个步骤是调用`AbstractAspectJAdvice`中的`getJoinPointMatch`方法。
+而这个方法会去寻找`ExposeInvocationInterceptor.currentInvocation()`中是否有调用链。`ExposeInvocationInterceptor`这个类顾名思义是“暴露”调用链的，本质上是管理了一个`ThreadLocal`并把调用链放入这个`ThreadLocal`中。
+既然我们没有创建一个`ExposeInvocationInterceptor`实例，也就是说`ThreadLocal`根本不存在，切面无法找到调用链，所以就抛出了这个异常。
+
+其次，还记得在[高级切面与低级切面（`@Aspect` vs Advisor）](https://github.com/Emil-Stampfly-He/basics/blob/215fd9f2e605ad34274d5f235586dd4fd78f6046/Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)第2.2节中的打印结果吗：
+```aiignore
+org.springframework.aop.interceptor.ExposeInvocationInterceptor.ADVISOR
+```
+我们明明只是定义了一个高级切面（内含两个低级切面）加一个低级切面，可是`AnnotationAwareAspectJAutoProxyCreator`却给我们格外创建了一个`ExposeInvocationInterceptor.ADVISOR`的切面。
+
+结合这两点来看，这表明，要想让所有切面拿到同一个`ThreadLocal`中的调用链，我们必须默认地给所有切面外加一个最大的切面`ADVICE`，这个切面功能是维护了一个`ThreadLocal`并把调用链放入其中，以便所有切面都能拿到同一个调用链——这也就是`ExposeInvocationInterceptor`所做的：
+```aiignore
+---------------------------------------------------------------------------
+                                                                          |
+    before1-----------------------------------------|                     |
+                                                    |                     |
+        before2-------------------------            |                     |
+                                       |            |                     |
+            target -------- 目标     advice2      advice1    ExposeInvocationInterceptor
+                                       |            |                   ADVICE
+                                       |            |                     |
+        after2--------------------------            |                     |
+                                                    |                     |
+    after1------------------------------------------|                     |
+                                                                          |
+---------------------------------------------------------------------------
+```
+到此，我们明白了，在给代理工厂加入切面`proxyFactory.addAdvisors(list)`之前，需要加入这个最大的切面：
+```java
+// 准备把MethodInvocation放入当前线程
+// ExposeInvocationInterceptor是单例类
+proxyFactory.addAdvice(ExposeInvocationInterceptor.INSTANCE);
+proxyFactory.addAdvisors(list);
+```
+这样便能够正常运行了：
+```aiignore
+before1
+before2
+around before
+Target foo
+around after
+afterReturning
+```
+确实是层状调用的模式。当然，我们这里忽略了通知调用的顺序。如果要指定顺序，需要将每个通知都放入一个高级切面类并使用`@Order`进行顺序的指定，这里不再展开。
+
+## 5. `proceed`责任链模式
