@@ -4,7 +4,7 @@
 >
 > 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
 > 
-> 注意：学习本章内容之前，建议先熟悉[静态通知调用](https://github.com/Emil-Stampfly-He/basics/blob/09f5c2816dbb8cca14f412d712cc451e7d85cd87/Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)的内容
+> 注意：阅读本章内容之前，建议先熟悉[静态通知调用](https://github.com/Emil-Stampfly-He/basics/blob/09f5c2816dbb8cca14f412d712cc451e7d85cd87/Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)的内容
 
 在[静态通知调用](https://github.com/Emil-Stampfly-He/basics/blob/09f5c2816dbb8cca14f412d712cc451e7d85cd87/Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)一节中，我们还有一个悬而未决的问题。
 我们谈到了调用链`MethodInvocation`中的`proceed`方法：
@@ -124,7 +124,7 @@ InterceptorAndDynamicMethodMatcher[interceptor=org.springframework.aop.framework
 ```java
 record InterceptorAndDynamicMethodMatcher(MethodInterceptor interceptor, MethodMatcher matcher) {}
 ```
-> `record`我们就简单地当成是`class`，这里不会深入讲解这个关键字和特性。
+> `record`我们就当成是带有getter和setter还有其他一些默认方法的`class`，这里不会深入讲解这个关键字和特性。
 
 `MethodMatcher`乍一看好像没见过，实际上我们之前使用过的切点类`AspectJExpressionPointcut`，它所继承的接口`IntroductionAwareMethodMatcher`是`MethodMatcher`的一个子接口。
 所以这个`MethodMatcher`就是切点。也就是说，这个“拦截器与动态方法匹配器”是由一个环绕通知和一个切点组成的。这个组成很好理解，因为`@Before("execution(* foo(..)) && args(x)")`被拆成两部分后，前一部分需要被转换成一个环绕通知，而后一部分需要在运行时去切入方法。
