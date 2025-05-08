@@ -115,6 +115,6 @@ public class MyApplication {
       - **Before Advice**（`@Before`）── 执行 `beforeAdvice()`；  
       - **Around Advice**（`@Around`）── 调用 `proceed()` 前逻辑；  
       - **目标方法**（`Target#foo` / `bar`）实际上被调用；  
-      - 开始一层层退出，*Around Advice*后逻辑被执行
+      - 开始一层层退出，**Around Advice**后逻辑被执行
       - 退出**Before Advice**
    3. 链条执行完毕，最终结果返回给调用者。
