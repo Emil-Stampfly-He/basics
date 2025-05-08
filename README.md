@@ -53,4 +53,5 @@
 * [高级切面与低级切面](Frameworks/src/main/java/spring/aop/AdvisorAndAspect.md)
 * 通知调用
   * [静态通知调用](Frameworks/src/main/java/spring/aop/StaticInvocationOfAdvice.md)
-  * [动态通知调用]()
+  * [动态通知调用](Frameworks/src/main/java/spring/aop/DynamicInvocationOfAdvice.md)
+* [Spring AOP总结](Frameworks/src/main/java/spring/aop/summarization/SpringAOPSummarization.md)
