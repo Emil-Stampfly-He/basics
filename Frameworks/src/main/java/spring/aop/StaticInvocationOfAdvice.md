@@ -1,5 +1,9 @@
 # 静态通知调用
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 1. 统一转换为环绕通知
 我们知道可以使用一些注解来表示通知：`@Before`、`@After`、`@Around`等等。这些注解对应的通知类为：
 * `AspectJMethodBeforeAdvice`
