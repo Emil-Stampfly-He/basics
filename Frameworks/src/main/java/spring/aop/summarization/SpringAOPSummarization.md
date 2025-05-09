@@ -66,10 +66,10 @@ public class MyApplication {
 接下来，我们主要关注Spring AOP中发生的事情。
 
 1. **解析切面定义**  
-   Spring 启动时扫描所有 `@Aspect` 注解的类（如 `MyAspect`），并把带有 `@Before`、`@Around`、`@After` 等方法标记的元信息提取出来，交给一个 **AspectJAnnotationAdvisorFactory** 去生成“候选” `Advisor`。
+   Spring 启动时扫描所有 `@Aspect` 注解的类（如 `MyAspect`），并把带有 `@Before`、`@Around`、`@After` 等方法标记的元信息提取出来，交给一个 **`ReflectiveAspectJAdvisorFactory`** 去生成“候选” `Advisor`。
 
 2. **组装低级 Advisor**  
-   `AspectJAnnotationAdvisorFactory` 会将每个切面方法分装为一个 `Pointcut` + `Advice`：  
+   `ReflectiveAspectJAdvisorFactory` 会将每个切面方法分装为一个 `Pointcut` + `Advice`：  
    1. 对于 `@Before("…")`，生成一个 `AspectJExpressionPointcut` 和一个 `AspectJMethodBeforeAdvice`，再封装成一个 `DefaultPointcutAdvisor`；  
    2. 对于 `@Around("…")`，生成一个 `AspectJExpressionPointcut` 和一个 `AspectJAroundAdvice`，再封装成另一个 `DefaultPointcutAdvisor`；  
    3. 所有这些 `Advisor` 都被当成候选切面缓存下来，等待后续匹配。  
