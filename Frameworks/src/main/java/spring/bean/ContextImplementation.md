@@ -234,6 +234,127 @@ public static void main(String[] args) {
 spring.bean.TestBeanFactory$Bean2@1bd4fdd
 ```
 
-## 3. 总结
+## 3. `@Autowired`与`@Resourece`的优先级
+
+### 3.1. `@Autowired`与`@Resource`的区别
+假设我们要注入一个Bean，但是给这个Bean上既加了`@Autowired`又加了`@Resource`，那么Spring会使用哪个注解呢？
+
+假设我们现在有以下代码（多了一个内部接口`Inter`和实现了这个接口的两个类`Bean3`和`Bean4`。我们使用`@Autowired`给`Bean1`注入一个`Inter`类型的Bean：
+```java
+@Slf4j
+public class TestBeanFactory {
+    public static void main(String[] args) {
+        /*...*/
+    }
+
+    @Configuration
+    static class Config {
+        @Bean
+        public Bean1 bean1() {return new Bean1();}
+        @Bean
+        public Bean2 bean2() {return new Bean2();}
+        @Bean
+        public Bean3 bean3() {return new Bean3();}
+        @Bean
+        public Bean4 bean4() {return new Bean4();}
+    }
+
+    interface Inter { }
+
+    static class Bean3 implements Inter { }
+    static class Bean4 implements Inter { }
+
+    @Slf4j
+    static class Bean1 {
+        @Autowired private Bean2 bean2;
+        @Autowired private Inter inter;
+
+        public Bean1() {log.info("构造Bean1");}
+        public Bean2 getBean2() {return bean2;}
+        public Inter getInter() {return inter;}
+    }
+
+    @Slf4j
+    static class Bean2 { public Bean2() {log.info("构造Bean2");}}
+}
+```
+像这样`@Autowired private Inter inter;`来注入一个`Inter`类型的Bean，IDE就已经给我们报错了，因为实现了这个接口的Bean有两种，Spring并不能知道是注入`Bean3`还是`Bean4`。一种解决方案是加上`@Qualifier`：
+
+```java
+@Autowired @Qualifier("bean3") private Inter inter;
+```
+这样Spring就能够根据`@Qualifier`中指定的Bean名称去注入相应的Bean。但一般地，我们将上面这行改成下面这一行：
+```java
+@Autowired private Inter bean3;
+```
+这样Spring就能直接根据`bean3`来寻找`Bean3`并注入，不用多余的注解。
+
+`@Resource`跟`@Autowired`非常相似，只不过可以给`@Resource`指定一个字符串的值。如果没有指定值，那么`@Resource`跟`@Autowired`一样，而如果指定了值，那么就相当于`@Autowired` + `@Qualifier`：
+```java
+// 不报错，注入bean3
+@Resource("bean3") private Inter inter;
+public Inter getInter() {return inter;}
+
+// 不报错，注入bean4
+@Resource(name = "bean4") private Inter bean3;
+public Inter getInter() {return bean3;}
+
+// 报错
+@Resource private Inter inter;
+public Inter getInter() {return inter;}
+```
+
+### 3.2. `@Autowired`叠加`@Resource`
+现在我们将注入改成这样（现实中不会有人这么做）：
+```java
+@Autowired 
+@Resource(name = "bean4") 
+private Inter bean3;
+```
+那么下面的输出会是什么呢？
+```java
+System.out.println(beanFactory.getBean(Bean1.class).getInter());
+```
+答案是：
+```aiignore
+spring.bean.TestBeanFactory$Bean3@145f66e3
+```
+`@Autowired`生效而`@Resource`未生效（即使把`@Resource`放在`@Autowired`上面也一样，生效顺序与谁上谁下无关）。这说明`@Autowired`的Bean后处理器的优先级更高。
+我们把`main`方法中的第4步改成下面的代码就可以查看谁先生效：
+```java
+// 4. Bean后处理器，针对Bean的生命周期的各个阶段提供扩展，例如@Autowired
+beanFactory.getBeansOfType(BeanPostProcessor.class).values()
+        .forEach(beanPostProcessor -> {
+            System.out.println(beanPostProcessor.getClass().getName());
+            beanFactory.addBeanPostProcessor(beanPostProcessor);
+        });
+```
+```aiignore
+org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor
+org.springframework.context.annotation.CommonAnnotationBeanPostProcessor
+```
+确实是`@Autowired`后处理器先作用，所以`@Autowired`先生效，`@Resource`就被覆盖了。
+
+### 3.3. 控制顺序
+我们通过一个比较器来反转顺序：
+```java
+// 4. Bean后处理器，针对Bean的生命周期的各个阶段提供扩展，例如@Autowired
+beanFactory.getBeansOfType(BeanPostProcessor.class).values()
+        .stream()
+        .sorted(beanFactory.getDependencyComparator())
+        .forEach(beanPostProcessor -> {
+            System.out.println(beanPostProcessor.getClass().getName());
+            beanFactory.addBeanPostProcessor(beanPostProcessor);
+        });
+```
+再查看结果，就能发现`@Resource`生效而`@Autowired`未生效了：
+```aiignore
+org.springframework.context.annotation.CommonAnnotationBeanPostProcessor
+org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor
+...
+spring.bean.TestBeanFactory$Bean4@799f10e1
+```
+
+## 4. `ApplicationContext`的实现
 `BeanFactory`本身的功能十分有限，并不会主动调用BeanFactory后处理器、不会主动调用Bean后处理器，也不会主动初始化单例。
 `BeanFactory`只是一个非常基础的容器，其他功能需要`ApplicationContext`来提供。

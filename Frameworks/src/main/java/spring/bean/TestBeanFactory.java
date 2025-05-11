@@ -1,5 +1,6 @@
 package spring.bean;
 
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -32,7 +33,12 @@ public class TestBeanFactory {
 
         // 4. Bean后处理器，针对Bean的生命周期的各个阶段提供扩展，例如@Autowired
         beanFactory.getBeansOfType(BeanPostProcessor.class).values()
-                .forEach(beanFactory::addBeanPostProcessor);
+                .stream()
+                .sorted(beanFactory.getDependencyComparator())
+                .forEach(beanPostProcessor -> {
+                    System.out.println(beanPostProcessor.getClass().getName());
+                    beanFactory.addBeanPostProcessor(beanPostProcessor);
+                });
 
         for (String beanDefinitionName : beanFactory.getBeanDefinitionNames()) {
             System.out.println(beanDefinitionName);
@@ -42,6 +48,9 @@ public class TestBeanFactory {
         beanFactory.preInstantiateSingletons();
         System.out.println(">>>>>>>>>>>>>>>>>>>>>>");
         System.out.println(beanFactory.getBean(Bean1.class).getBean2());
+
+        System.out.println();
+        System.out.println(beanFactory.getBean(Bean1.class).getInter());
     }
 
     @Configuration
@@ -50,13 +59,25 @@ public class TestBeanFactory {
         public Bean1 bean1() {return new Bean1();}
         @Bean
         public Bean2 bean2() {return new Bean2();}
+        @Bean
+        public Bean3 bean3() {return new Bean3();}
+        @Bean
+        public Bean4 bean4() {return new Bean4();}
     }
+
+    interface Inter { }
+
+    static class Bean3 implements Inter { }
+    static class Bean4 implements Inter { }
 
     @Slf4j
     static class Bean1 {
         @Autowired private Bean2 bean2;
+        @Autowired @Resource(name = "bean4") private Inter bean3;
+
         public Bean1() {log.info("构造Bean1");}
         public Bean2 getBean2() {return bean2;}
+        public Inter getInter() {return bean3;}
     }
 
     @Slf4j
