@@ -36,7 +36,7 @@ public class TestApplication {
         }
     }
 
-    @Configuration
+    // @Configuration
     static class WebConfig {
         @Bean
         public ServletWebServerFactory servletWebServerFactory() {
