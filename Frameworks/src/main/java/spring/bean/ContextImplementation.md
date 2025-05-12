@@ -1,5 +1,9 @@
 # 容器实现
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 1. `BeanFactory`的创建
 `BeanFactory`最重要的一个实现类是我们前面已经见过的`DefaultBlistableBeanFactory`：
 ```java
@@ -358,3 +362,138 @@ spring.bean.TestBeanFactory$Bean4@799f10e1
 ## 4. `ApplicationContext`的实现
 `BeanFactory`本身的功能十分有限，并不会主动调用BeanFactory后处理器、不会主动调用Bean后处理器，也不会主动初始化单例。
 `BeanFactory`只是一个非常基础的容器，其他功能需要`ApplicationContext`来提供。
+
+以下为两个目前更加被广发使用的容器实现，省略了`.xml`配置相关的容器实现。
+
+### 4.1. `AnnotationConfigApplicationContext`
+从名字上可以看出，这个是基于注解配置的`ApplicationContext`。我们首先准备以下代码：
+```java
+public class TestApplication {
+    public static void main(String[] args) {testAnnotationConfigApplicationContext();}
+
+    // 基于java配置来创建
+    private static void testAnnotationConfigApplicationContext() {
+        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(Config.class);
+
+        for (String beanDefinitionName : context.getBeanDefinitionNames()) {
+            System.out.println(beanDefinitionName);
+        }
+        System.out.println(context.getBean(Bean2.class).getBean1());
+    }
+
+    @Configuration
+    static class Config {
+        @Bean public Bean1 bean1() {return new Bean1();}
+        @Bean public Bean2 bean2(Bean1 bean1) {
+            Bean2 bean2 = new Bean2();
+            bean2.setBean1(bean1);
+            return bean2;
+        }
+    }
+
+    static class Bean1 {}
+    static class Bean2 {
+        private Bean1 bean1;
+        public void setBean1(Bean1 bean1) {this.bean1 = bean1;}
+        public Bean1 getBean1() {return bean1;}
+    }
+
+}
+```
+有一个加了`@Configuration`的配置类，其中有两个`@Bean`——`Bean2`依赖于`Bean1`。在主方法中，我们先创建了一个容器，并给容器指定配置类为`Config`，然后打印容器中所有的`BeanDefinition`：
+```aiignore
+org.springframework.context.annotation.internalConfigurationAnnotationProcessor
+org.springframework.context.annotation.internalAutowiredAnnotationProcessor
+org.springframework.context.annotation.internalCommonAnnotationProcessor
+org.springframework.context.event.internalEventListenerProcessor
+org.springframework.context.event.internalEventListenerFactory
+testApplication.Config
+bean1
+bean2
+spring.bean.TestApplication$Bean1@2de23121
+```
+可以看到，除了我们之前已经熟悉了的前5个后处理器，剩下的就是我们自己配置的Bean。`Config`作为配置类也被当作是一个Bean被注入容器中，是为了发现配置类中所配置的Bean。
+
+### 4.2. `AnnotationConfigServletWebServerApplicationContext`
+该容器实现与上面的容器实现类似，只不过是用于web环境，这一点从名字中可以看出。我们可以仿照上面的方法来创建这个容器。但需要注意的是，这一次`@Configuration`类中就不仅仅是之前的两个Bean那么简单。我们还需要往里面补充一些与网络配置相关的Bean。
+
+新创建一个`WebConfig`，首先必须配置一个`ServletWebServer`，也就是内嵌servlet的web server。没有这个web server，容器就不可能运行在网络环境下。
+我们可以使用一个基于Tomcat的`ServletWebServer`的工厂来获取一个Tomcat服务器：
+```java
+@Configuration
+static class WebConfig {
+    @Bean
+    public ServletWebServerFactory servletWebServerFactory() {
+        return new TomcatServletWebServerFactory();
+    }
+}
+```
+光有服务器还不行，浏览器或者客户端发来的请求都需要经过一个叫`DispatcherServlet`的前控制器，也就是说所有的请求都必须先经过它。所以这个Bean也必须注册：
+```java
+@Bean
+public DispatcherServlet dispatcherServlet() {
+    return new DispatcherServlet();
+}
+```
+接下来我们要让`DispatcherServlet`与Tomcat服务器产生关联：
+```java
+@Bean
+public DispatcherServletRegistrationBean dispatcherServletRegistrationBean(DispatcherServlet dispatcherServlet) {
+    return new DispatcherServletRegistrationBean(dispatcherServlet, "/");
+}
+```
+这里之所以将路径配置成`/`，是为了让所有请求都能够经过`DispathcerService`前控制器。
+
+这样，我们的网络配置就设置好了。为了查看我们配置的效果，可以创建一个最简单的controller：
+```java
+@Bean("/hello")
+public Controller controller() {
+    return (_, response) -> {
+        response.getWriter().print("Hello World");
+        return null;
+    };
+}
+```
+通过`localhost:8080`下的`/hello`就能够访问页面，看到页面中的`Hello World`了。
+![WebServerApplicationContext.png](img/WebServerApplicationContext.png)
+
+完整代码如下：
+```java
+public class TestApplication {
+    public static void main(String[] args) {
+        testAnnotationConfigServletWebServerApplicationContext();
+    }
+
+    // 基于java配置来创建，用于web环境
+    private static void testAnnotationConfigServletWebServerApplicationContext() {
+        AnnotationConfigServletWebServerApplicationContext context = new AnnotationConfigServletWebServerApplicationContext(WebConfig.class);
+    }
+
+    @Configuration
+    static class WebConfig {
+        @Bean
+        public ServletWebServerFactory servletWebServerFactory() {
+            return new TomcatServletWebServerFactory();
+        }
+
+        @Bean
+        public DispatcherServlet dispatcherServlet() {
+            return new DispatcherServlet();
+        }
+
+        @Bean
+        public DispatcherServletRegistrationBean dispatcherServletRegistrationBean(DispatcherServlet dispatcherServlet) {
+            return new DispatcherServletRegistrationBean(dispatcherServlet, "/");
+        }
+
+        @Bean("/hello")
+        public Controller controller() {
+            return (_, response) -> {
+                response.getWriter().print("Hello World");
+                return null;
+            };
+        }
+    }
+}
+```
+当我们在使用Spring Boot的时候，它会通过各种注解将这些网络配置的Bean自动加入容器中，这也是为什么使用Spring Boot是我们不需要手动注册这些Bean的原因。

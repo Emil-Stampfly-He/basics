@@ -1,5 +1,9 @@
 # 容器接口
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 1. `ApplicationContext`组合`BeanFactory`的功能
 `BeanFactory`是`ApplicationContext`的父接口，是Spring的核心容器。主要的`ApplicationContext`实现都是**组合**了它的功能。
 这说明`BeanFactory`实际上是`ApplicationContext`的一个成员变量。

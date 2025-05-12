@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.mvc.Controller;
 
+@SuppressWarnings("unused")
 public class TestApplication {
 
     public static void main(String[] args) {
@@ -30,7 +31,9 @@ public class TestApplication {
     // 基于java配置来创建，用于web环境
     private static void testAnnotationConfigServletWebServerApplicationContext() {
         AnnotationConfigServletWebServerApplicationContext context = new AnnotationConfigServletWebServerApplicationContext(WebConfig.class);
-
+        for (String beanDefinitionName : context.getBeanDefinitionNames()) {
+            System.out.println(beanDefinitionName);
+        }
     }
 
     @Configuration
