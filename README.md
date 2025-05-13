@@ -48,7 +48,9 @@
 * 容器
   * [容器接口](Frameworks/src/main/java/spring/bean/ContextInterface.md)
   * [容器实现](Frameworks/src/main/java/spring/bean/ContextImplementation.md)
-* [Bean后处理器](Frameworks/src/main/java/spring/bean/BeanPostProcessor.md)
+* 后处理器
+  * [Bean后处理器](Frameworks/src/main/java/spring/bean/bean_post_processor/BeanPostProcessor.md)
+  * [详解`@Autowired`的Bean后处理器](Frameworks/src/main/java/spring/bean/bean_post_processor/DigInAutowired.md)
 #### 1.2 AOP
 * 动态代理
   * [JDK动态代理](Core/src/main/java/proxy/jdk/JDKDynamicProxy.md)
