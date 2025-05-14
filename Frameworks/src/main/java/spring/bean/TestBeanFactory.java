@@ -29,7 +29,12 @@ public class TestBeanFactory {
 
         // 3. 让beanFactory执行BeanFactory后处理器
         beanFactory.getBeansOfType(BeanFactoryPostProcessor.class).values()
-                .forEach(beanFactoryPostProcessor -> beanFactoryPostProcessor.postProcessBeanFactory(beanFactory));
+                .forEach(beanFactoryPostProcessor -> {
+                    System.out.println(beanFactoryPostProcessor.getClass().getName());
+                    beanFactoryPostProcessor.postProcessBeanFactory(beanFactory);
+                });
+
+        System.out.println();
 
         // 4. Bean后处理器，针对Bean的生命周期的各个阶段提供扩展，例如@Autowired
         beanFactory.getBeansOfType(BeanPostProcessor.class).values()
@@ -40,9 +45,13 @@ public class TestBeanFactory {
                     beanFactory.addBeanPostProcessor(beanPostProcessor);
                 });
 
+        System.out.println();
+
         for (String beanDefinitionName : beanFactory.getBeanDefinitionNames()) {
             System.out.println(beanDefinitionName);
         }
+
+        System.out.println();
 
         // 5. 提前创建好单例Bean
         beanFactory.preInstantiateSingletons();
