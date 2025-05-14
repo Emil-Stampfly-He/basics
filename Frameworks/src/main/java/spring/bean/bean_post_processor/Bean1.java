@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class Bean1 {
     private static final Logger log = LoggerFactory.getLogger(Bean1.class);
     private Bean2 bean2;
-    private Bean3 bean3;
+    @Autowired private Bean3 bean3;
     private String home;
 
     @Autowired
@@ -41,5 +41,10 @@ public class Bean1 {
     @PreDestroy
     public void destroy() {
         log.info("@PreDestroy生效");
+    }
+
+    @Override
+    public String toString() {
+        return "Bean1 [home=" + home + ", bean2=" + bean2 + "], bean3=" + bean3 + "]";
     }
 }
