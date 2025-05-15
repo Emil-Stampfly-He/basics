@@ -154,11 +154,11 @@ System.out.println(bean1);
 ```java
 // 1.
 Method setBean2 = Bean1.class.getDeclaredMethod("setBean2", Bean2.class);
-// 2.
+// 2. MethodParameter构造方法的第二个参数是setBean2方法的参数索引；由于setBean2只有一个参数，所以索引为0
 DependencyDescriptor desc2 = new DependencyDescriptor(new MethodParameter(setBean2, 0), true);
 // 3. 后面两个参数不重要，设置为null
 Object o1 = beanFactory.doResolveDependency(desc2, "bean2", null, null);
-// 4.
+// 4. 
 setBean2.setAccessible(true);
 setBean2.invoke(bean1, beanFactory.getBean(Bean2.class));
 System.out.println(bean1);
