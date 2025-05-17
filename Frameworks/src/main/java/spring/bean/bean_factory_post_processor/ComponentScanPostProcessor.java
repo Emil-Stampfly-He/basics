@@ -23,7 +23,7 @@ public class ComponentScanPostProcessor implements BeanFactoryPostProcessor {
     @Override // context.refresh()时这个方法会被调用
     public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
         try {
-            // 不足之处：将Config.class写死了，实际上应该检查所有类上是否有@ComponentScan
+            // // 潜在改进：将Config.class写死了，实际上应该检查所有类上是否有@ComponentScan
             Optional<ComponentScan> componentScan = AnnotationUtils.findAnnotation(Config.class, ComponentScan.class);
             if (componentScan.isPresent()) {
                 for (String basePackage :componentScan.get().basePackages()){
