@@ -527,4 +527,27 @@ druidDataSource
 18:23:59.484 [main] INFO com.alibaba.druid.pool.DruidDataSource -- {dataSource-1} closed
 ```
 
-## 3. Mapper
+## 3. MyBatis中`@Mapper`的处理
+Mapper层一般都是一些接口，而Spring是不能直接管理接口的。要让Spring将接口转换为`BeanDefinition`从而放入容器中进行管理，需要一些其他的手段。
+
+### 3.1. 接口转为对象
+我们可以创建一个工厂（这个工厂本身是一个Bean），让这个工厂为我们代理mapper。由于所有的mapper都需要依赖同一个`SqlSessionFactory`才能执行SQL、管理事务、缓存等，所以需要将`SqlSessionFactory`注入：
+```java
+// Config.java
+@Bean
+public MapperFactoryBean<Mapper1> mapper1(SqlSessionFactory sqlSessionFactory) {
+    MapperFactoryBean<Mapper1> factoryBean = new MapperFactoryBean<>(Mapper1.class);
+    factoryBean.setSqlSessionFactory(sqlSessionFactory);
+    return factoryBean;
+}
+
+@Bean
+public MapperFactoryBean<Mapper2> mapper2(SqlSessionFactory sqlSessionFactory) {
+    MapperFactoryBean<Mapper2> factoryBean = new MapperFactoryBean<>(Mapper2.class);
+    factoryBean.setSqlSessionFactory(sqlSessionFactory);
+    return factoryBean;
+}
+```
+但这样添加有一个缺点：如果我们的mapper接口非常多，那么我们需要写大量重复的代码。能不能一次性将所有mapper全部扫描到并批量进行添加呢？
+
+### 3.2. 手动模拟解析`@MapperScan`与`@Mapper`

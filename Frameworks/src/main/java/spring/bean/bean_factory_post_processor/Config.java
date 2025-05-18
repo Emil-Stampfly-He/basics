@@ -1,10 +1,14 @@
 package spring.bean.bean_factory_post_processor;
 
 import com.alibaba.druid.pool.DruidDataSource;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
+import org.mybatis.spring.mapper.MapperFactoryBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import spring.bean.bean_factory_post_processor.mapper.Mapper1;
+import spring.bean.bean_factory_post_processor.mapper.Mapper2;
 
 import javax.sql.DataSource;
 
