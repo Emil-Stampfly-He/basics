@@ -29,7 +29,7 @@ public class TestBeanFactoryPostProcessor {
 
         // context.registerBean(ComponentScanPostProcessor.class);
         context.registerBean(AnnotationBeanPostProcessor.class);
-
+        context.registerBean(MapperPostProcessor.class);
 
         context.refresh();
 

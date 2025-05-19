@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
+// TODO：改成BeanDefinitionRegistryPostProcessor
 public class AnnotationBeanPostProcessor implements BeanFactoryPostProcessor {
 
     @Override

@@ -406,8 +406,8 @@ AbstractBeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinit
 
 另外的三个自动装配策略是（还有一个过时了的策略，我们忽略不计）：
 1. `AUTOWIRE_NO`：默认选项，不进行自动装配。这是最开始导致错误的原因，Spring不知道要怎么寻找Bean注入。
-2. `AUTOWIRE_BY_NAME`：按属性名称自动注入，即根据属性名匹配容器中同名的Bean。适合`setter`注入，不符合我们的场景。
-3. `AUTOWIRE_BY_TYPE`：按属性类型自动注入，即根据属性类型匹配容器中唯一的Bean。适合字段注入，不符合我们的场景。
+2. `AUTOWIRE_BY_NAME`：按属性名称自动注入。
+3. `AUTOWIRE_BY_TYPE`：按属性类型自动注入。
 
 指定了装配策略就能运行成功了：
 ```aiignore
@@ -551,3 +551,102 @@ public MapperFactoryBean<Mapper2> mapper2(SqlSessionFactory sqlSessionFactory) {
 但这样添加有一个缺点：如果我们的mapper接口非常多，那么我们需要写大量重复的代码。能不能一次性将所有mapper全部扫描到并批量进行添加呢？
 
 ### 3.2. 手动模拟解析`@MapperScan`与`@Mapper`
+还是一样，既然这个活是由Bean工厂后处理器做的，那么我们就把这个处理逻辑放到一个Bean工厂后处理器中：
+```java
+public class MapperPostProcessor implements BeanDefinitionRegistryPostProcessor {
+    @Override
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory) throws BeansException {
+        // TODO
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(beanFactory);
+    }
+}
+```
+我们的重点是要将获取到的资源打包成`BeanDefinition`并注册到容器中，所以第一个方法`postProcessBeanDefinitionRegistry`是我们主要关注的，这个方法的参数能够使用`registerBeanDefinition`方法。步骤如下：
+1. 获取资源
+2. 对资源进行遍历，看看拿到的类是不是一个接口
+   * 如果是接口
+     1. 创建`beanDefinition` \
+        像我们在`Config`类中手动注册`MapperFactoryBean`的`@Bean`一样，我们要先给`beanDefinition`加上mapper的名字并注入`SqlSessionFactory`。
+     2. 创建`beanName`
+     3. 注册`beanDefinition`
+   * 如果不是接口，则不管。MyBatis中的`Mapper`一定是接口才行
+
+按照这个逻辑写出来的代码如下：
+```java
+try {
+    PathMatchingResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
+    // 潜在改进：不应该写死
+    Resource[] resources = resourceResolver.getResources("classpath:spring/bean/bean_factory_post_processor/**/*.class");
+    CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
+    AnnotationBeanNameGenerator generator = new AnnotationBeanNameGenerator();
+    
+    for (Resource resource : resources) {
+        MetadataReader reader = factory.getMetadataReader(resource);
+        ClassMetadata classMetadata = reader.getClassMetadata();
+        boolean isInterface = classMetadata.isInterface();
+
+        if (isInterface) {
+            AbstractBeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(MapperFactoryBean.class)
+                    .addConstructorArgValue(classMetadata.getClassName())
+                    .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE) // 使用AUTOWIRED_BY_NAME可能出现找不到对应名字的Bean
+                    .getBeanDefinition();
+            String beanName = generator.generateBeanName(beanDefinition, beanFactory);
+            beanFactory.registerBeanDefinition(beanName, beanDefinition);
+        }
+    }
+} catch (IOException e) {
+    throw new RuntimeException(e);
+}
+```
+我们运行，却发现找不到两个mapper，而只有一个`mapperFactoryBean`。为什么会出错？这是因为，第一次进入`for`循环时，`beanDefinition`是以`MapperFactoryBean`为基础创建的。当以后多次进入`for`循环时，`beanDefinition`还是以`MapperFactoryBean`为基础创建的，后续的会将前面的`beanDefinition`覆盖掉，这就导致了问题。解决方法也很简单，既然`MapperFactoryBean`是不变的，而需要被创建Bean的mapper是变的，那就依赖mapper创建`beanName`就好了：
+```java
+public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory) throws BeansException {
+    try {
+        PathMatchingResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
+        // 潜在改进：不应该写死
+        Resource[] resources = resourceResolver.getResources("classpath:spring/bean/bean_factory_post_processor/**/*.class");
+        CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
+        AnnotationBeanNameGenerator generator = new AnnotationBeanNameGenerator();
+
+        for (Resource resource : resources) {
+            MetadataReader reader = factory.getMetadataReader(resource);
+            ClassMetadata classMetadata = reader.getClassMetadata();
+            boolean isInterface = classMetadata.isInterface();
+
+            if (isInterface) {
+                AbstractBeanDefinition beanDefinition1 = BeanDefinitionBuilder.genericBeanDefinition(MapperFactoryBean.class)
+                        .addConstructorArgValue(classMetadata.getClassName())
+                        .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE)
+                        .getBeanDefinition();
+                // 根据mapper再创建一个beanDefinition，这个beanDefinition只是用于命名
+                AbstractBeanDefinition beanDefinition2 = BeanDefinitionBuilder.genericBeanDefinition(classMetadata.getClassName())
+                        .getBeanDefinition();
+                
+                String beanName = generator.generateBeanName(beanDefinition2, beanFactory);
+                beanFactory.registerBeanDefinition(beanName, beanDefinition1);
+            }
+        }
+    } catch (IOException e) {
+        throw new RuntimeException(e);
+    }
+}
+```
+我们再次运行，一切正常：
+```aiignore
+16:45:07.754 [main] INFO com.alibaba.druid.pool.DruidDataSource -- {dataSource-1} inited
+16:45:07.847 [main] INFO spring.bean.bean_factory_post_processor.Bean1 -- Managed by Spring
+config
+spring.bean.bean_factory_post_processor.AnnotationBeanPostProcessor
+spring.bean.bean_factory_post_processor.MapperPostProcessor
+mapper1
+mapper2
+bean1
+sqlSessionFactoryBean
+druidDataSource
+16:45:07.857 [main] INFO com.alibaba.druid.pool.DruidDataSource -- {dataSource-1} closing ...
+16:45:07.858 [main] INFO com.alibaba.druid.pool.DruidDataSource -- {dataSource-1} closed
+```

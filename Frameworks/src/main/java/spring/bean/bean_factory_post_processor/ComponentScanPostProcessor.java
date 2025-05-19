@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Optional;
 
+// TODO：改成BeanDefinitionRegistryPostProcessor
 public class ComponentScanPostProcessor implements BeanFactoryPostProcessor {
 
     @Override // context.refresh()时这个方法会被调用
