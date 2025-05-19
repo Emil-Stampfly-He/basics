@@ -170,7 +170,7 @@ if (componentScan.isPresent()) {
 但是有些注解是`@Component`的派生注解，例如`@Controller`、`@Service`等，我们仅仅判断类上是否有`@Component`注解是不够的，因为程序不会自动识别其他`@Component`的派生注解，比如`Config`类上虽然加了`@Configuration`，而且`@Configuration`中包含了`@Component`，但是输出仍然为`false`。我们需要使用`hasMetaAnnotation`方法来查找`@Component`作为元注解的情况：
 ```java
 Optional<ComponentScan> componentScan = AnnotationUtils.findAnnotation(Config.class, ComponentScan.class);
-    if (componentScan.isPresent()) {
+if (componentScan.isPresent()) {
     for (String basePackage :componentScan.get().basePackages()){
         String path = "classpath*:" + basePackage.replace('.', '/') + "/**/*.class";
         CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory(); // 资源读取器的工厂
@@ -225,7 +225,7 @@ Optional<ComponentScan> componentScan = AnnotationUtils.findAnnotation(Config.cl
 
 ```java
 Optional<ComponentScan> componentScan = AnnotationUtils.findAnnotation(Config.class, ComponentScan.class);
-    if (componentScan.isPresent()) {
+if (componentScan.isPresent()) {
     for (String basePackage :componentScan.get().basePackages()){
         String path = "classpath*:" + basePackage.replace('.', '/') + "/**/*.class";
 
@@ -267,24 +267,19 @@ bean3
 PathMatchingResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
 Resource[] resources = resourceResolver.getResources(path);
 ```
-* 由于我们不能直接使用`DefaultListableBeanFactory`了，而`ConfigurableListableBeanFactory`没有实现`BeanDefinitionRegistry`的接口，意味着它不能注册`BeanDefinition`，所以这里我们还要判断一下`beanFactory`的类型：
-```java
-if (configurableListableBeanFactory instanceof DefaultListableBeanFactory beanFactory) {
-    String beanName = generator.generateBeanName(beanDefinition, beanFactory);
-    beanFactory.registerBeanDefinition(beanName, beanDefinition);
-}
-```
 * 异常使用`try-catch`块处理
+* 
 ```java
-public class ComponentScanPostProcessor implements BeanFactoryPostProcessor {
+public class ComponentScanPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
     @Override // context.refresh()时这个方法会被调用
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
-        // 改动3
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory) throws BeansException {
+        // 改动2
         try {
             // 潜在改进：将Config.class写死了，实际上应该检查所有类上是否有@ComponentScan
             Optional<ComponentScan> componentScan = AnnotationUtils.findAnnotation(Config.class, ComponentScan.class);
             if (componentScan.isPresent()) {
-                for (String basePackage : componentScan.get().basePackages()) {
+                for (String basePackage :componentScan.get().basePackages()){
                     String path = "classpath*:" + basePackage.replace('.', '/') + "/**/*.class";
 
                     CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
@@ -302,19 +297,18 @@ public class ComponentScanPostProcessor implements BeanFactoryPostProcessor {
 
                         if (hasComponent || hasComponentDerivative) {
                             AbstractBeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(className).getBeanDefinition();
-
-                            // 改动2：判断类型，确保beanFactory拥有BeanDefinitionRegistry的beanDefinition注册方法
-                            if (configurableListableBeanFactory instanceof DefaultListableBeanFactory beanFactory) {
-                                String beanName = generator.generateBeanName(beanDefinition, beanFactory);
-                                beanFactory.registerBeanDefinition(beanName, beanDefinition);
-                            }
+                            String beanName = generator.generateBeanName(beanDefinition, beanFactory);
+                            beanFactory.registerBeanDefinition(beanName, beanDefinition);
                         }
                     }
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        } catch (IOException e) {throw new RuntimeException(e);}
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(configurableListableBeanFactory);
     }
 }
 ```
@@ -429,7 +423,7 @@ CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
 MetadataReader reader = factory.getMetadataReader(new ClassPathResource("spring/bean/bean_factory_post_processor/Config.class"));
 Set<MethodMetadata> annotatedMethods = reader.getAnnotationMetadata().getAnnotatedMethods(Bean.class.getName());
 
-    for (MethodMetadata annotatedMethod : annotatedMethods) {
+for (MethodMetadata annotatedMethod : annotatedMethods) {
     BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition();
 
     // 拿到@Bean中的属性
@@ -462,13 +456,13 @@ druidDataSource
 ```
 到此，`@Bean`的解析也完成了，可以将上述逻辑提取到`AnnotationBeanPostProcessor`中，作为一个Bean工厂后处理器。与`ComponentScanPostProcessor`一样，需要进行一些小改动：
 ```java
-public class AnnotationBeanPostProcessor implements BeanFactoryPostProcessor {
+public class AnnotationBeanPostProcessor implements BeanDefinitionRegistryPostProcessor{
 
     @Override
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
-        // 改动1：try-catch捕获异常
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory) throws BeansException {
         try {
             CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
+
             // 潜在改进：应当遍历所有扫描到的包
             MetadataReader reader = factory.getMetadataReader(new ClassPathResource("spring/bean/bean_factory_post_processor/Config.class"));
             Set<MethodMetadata> annotatedMethods = reader.getAnnotationMetadata().getAnnotatedMethods(Bean.class.getName());
@@ -487,14 +481,14 @@ public class AnnotationBeanPostProcessor implements BeanFactoryPostProcessor {
                 AbstractBeanDefinition beanDefinition = builder.setFactoryMethodOnBean(annotatedMethod.getMethodName(), "config")
                         .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR)
                         .getBeanDefinition();
-                // 改动2
-                if (configurableListableBeanFactory instanceof DefaultListableBeanFactory beanFactory) {
-                    beanFactory.registerBeanDefinition(annotatedMethod.getMethodName(), beanDefinition);
-                }
+                beanFactory.registerBeanDefinition(annotatedMethod.getMethodName(), beanDefinition);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        } catch (IOException e) {throw new RuntimeException(e);}
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(configurableListableBeanFactory);
     }
 }
 ```
@@ -630,12 +624,10 @@ public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory
                 beanFactory.registerBeanDefinition(beanName, beanDefinition1);
             }
         }
-    } catch (IOException e) {
-        throw new RuntimeException(e);
-    }
+    } catch (IOException e) {throw new RuntimeException(e);}
 }
 ```
-我们再次运行，一切正常：
+给容器加上我们定义的mapper Bean工厂后处理器：`context.registerBean(MapperPostProcessor.class);`，然后再次运行，一切正常：
 ```aiignore
 16:45:07.754 [main] INFO com.alibaba.druid.pool.DruidDataSource -- {dataSource-1} inited
 16:45:07.847 [main] INFO spring.bean.bean_factory_post_processor.Bean1 -- Managed by Spring

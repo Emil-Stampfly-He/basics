@@ -27,7 +27,7 @@ public class TestBeanFactoryPostProcessor {
 //        context.registerBean(MapperScannerConfigurer.class,
 //                bd -> bd.getPropertyValues().add("basePackage", "spring.bean.bean_factory_post_processor.mapper"));
 
-        // context.registerBean(ComponentScanPostProcessor.class);
+        context.registerBean(ComponentScanPostProcessor.class);
         context.registerBean(AnnotationBeanPostProcessor.class);
         context.registerBean(MapperPostProcessor.class);
 

@@ -3,9 +3,7 @@ package spring.bean.bean_factory_post_processor;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
-import org.springframework.beans.factory.support.BeanDefinitionBuilder;
-import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.beans.factory.support.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.type.MethodMetadata;
@@ -16,11 +14,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
-// TODO：改成BeanDefinitionRegistryPostProcessor
-public class AnnotationBeanPostProcessor implements BeanFactoryPostProcessor {
+public class AnnotationBeanPostProcessor implements BeanDefinitionRegistryPostProcessor{
 
     @Override
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanFactory) throws BeansException {
         try {
             CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
 
@@ -42,12 +39,15 @@ public class AnnotationBeanPostProcessor implements BeanFactoryPostProcessor {
                 AbstractBeanDefinition beanDefinition = builder.setFactoryMethodOnBean(annotatedMethod.getMethodName(), "config")
                         .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR)
                         .getBeanDefinition();
-                if (configurableListableBeanFactory instanceof DefaultListableBeanFactory beanFactory) {
-                    beanFactory.registerBeanDefinition(annotatedMethod.getMethodName(), beanDefinition);
-                }
+                beanFactory.registerBeanDefinition(annotatedMethod.getMethodName(), beanDefinition);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(configurableListableBeanFactory);
     }
 }

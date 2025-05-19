@@ -51,7 +51,7 @@ public class MapperPostProcessor implements BeanDefinitionRegistryPostProcessor 
     }
 
     @Override
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(beanFactory);
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+        BeanDefinitionRegistryPostProcessor.super.postProcessBeanFactory(configurableListableBeanFactory);
     }
 }
