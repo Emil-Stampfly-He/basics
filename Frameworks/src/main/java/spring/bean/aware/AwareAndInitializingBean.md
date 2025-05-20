@@ -1,5 +1,9 @@
 # `Aware`与`InitializingBean`
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 1. `Aware`和`InitializingBean`概览
 `Aware`和`InitializingBean`是一些注解功能的内置实现，换句话说，就是不依靠注解而实现注解的功能。
 

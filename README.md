@@ -54,6 +54,8 @@
      * [详解`@Autowired`的Bean后处理器](Frameworks/src/main/java/spring/bean/bean_post_processor/DigInAutowired.md)
      * [Bean工厂后处理器](Frameworks/src/main/java/spring/bean/bean_factory_post_processor/BeanFactoryPostProcessor.md)
    * [`Aware`和`InitializingBean`](Frameworks/src/main/java/spring/bean/aware/AwareAndInitializingBean.md)
+   * [初始化与销毁](Frameworks/src/main/java/spring/bean/init_destroy/InitAndDestroy.md)
+   * [Scope]()
 2. AOP
    * 动态代理
      * [JDK动态代理](Core/src/main/java/proxy/jdk/JDKDynamicProxy.md)
