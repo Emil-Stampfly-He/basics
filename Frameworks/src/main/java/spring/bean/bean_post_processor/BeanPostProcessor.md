@@ -1,5 +1,9 @@
 # Bean后处理器
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 ## 0. 前置知识：Bean的生命周期
 简单来说，Bean的生命周期大致为：
 ```aiignore

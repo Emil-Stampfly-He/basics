@@ -1,5 +1,9 @@
 # 详解`@Autowired`的Bean后处理器
 
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 我们已经知道，解析`@Autowired`注解的Bean后处理器是`AutowiredAnnotationBeanPostProcessor`。这节便围绕这个Bean后处理器展开。
 
 ## 1.

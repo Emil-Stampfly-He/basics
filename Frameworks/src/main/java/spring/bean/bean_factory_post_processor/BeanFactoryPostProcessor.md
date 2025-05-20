@@ -1,4 +1,9 @@
 # Bean工厂后处理器
+
+>**本笔记基于黑马程序员 Spring高级源码解读**
+>
+> 更美观清晰的版本在：[**Github**](https://github.com/Emil-Stampfly-He/basics)
+
 Bean工厂后处理器的功能与Bean后处理器的功能类似，主要是为Bean工厂补充一些功能并解析一些Bean。
 
 ## 1. 两个常见的Bean工厂处理器
