@@ -13,6 +13,7 @@
         <module>Frameworks</module>
         <module>New</module>
         <module>Core</module>
+        <module>OOPDesign</module>
     </modules>
 
     <dependencies>
