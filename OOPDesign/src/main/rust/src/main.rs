@@ -1,6 +1,7 @@
 mod strategy;
 
 use rust::command::client::run_client;
+use rust::command::enum_match::run_enum_match_pattern;
 use crate::strategy::duck_with_generics::DuckWithGenerics;
 use crate::strategy::duck_with_trait::Duck;
 use crate::strategy::fly_behavior::{FlyNoWay, FlyWithRocket, FlyWithWings};
@@ -37,4 +38,6 @@ fn main() {
     println!("----- Command Pattern -----");
     
     run_client();
+    println!();
+    run_enum_match_pattern();
 }
