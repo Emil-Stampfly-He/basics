@@ -44,6 +44,7 @@
 
 ## 四、OOP设计模式：Rust vs Java
 ### 1. [策略模式](OOPDesign/src/main/rust/src/strategy/strategy.md)
+### 2. [命令模式](OOPDesign/src/main/rust/src/command/command.md)
 
 ## 五、框架
 ### 1. Spring Framework
