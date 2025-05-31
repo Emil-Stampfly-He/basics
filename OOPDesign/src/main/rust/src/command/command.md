@@ -13,7 +13,7 @@ Client创建命令并通知Invoker去调用Command，Invoker在登记Command后�
 UML图如下：
 ![command_uml.png](pic/command_uml.png)
 
-核心思想是用Command将Invoker与Receiver完全解耦。Invoker现在完全不知道Receiver的具体命令，只知道Command接口。若Client要执行命令，则他将Command对象传给Invoker。Java示例如下:
+核心思想是用Command将Invoker与Receiver完全解耦。Invoker现在完全不知道Receiver的具体命令，只知道Command接口。若Client要执行命令，则他令Invoker登记Command对象。Java示例如下:
 ```java
 // Client，这个例子中是使用遥控器的人
 public class Client {
