@@ -1,10 +1,13 @@
 mod strategy;
+
+use rust::command::client::run_client;
 use crate::strategy::duck_with_generics::DuckWithGenerics;
 use crate::strategy::duck_with_trait::Duck;
 use crate::strategy::fly_behavior::{FlyNoWay, FlyWithRocket, FlyWithWings};
 use crate::strategy::quack_behavior::{Quack, Squeak};
 
 fn main() {
+    println!("----- Strategy Pattern -----");
     let mallard_duck = DuckWithGenerics::new(
         Quack,
         FlyWithWings,
@@ -29,4 +32,9 @@ fn main() {
     
     let mut mallard_duck = Duck::new(Box::new(Quack), Box::new(FlyWithWings));
     mallard_duck.set_quack_behavior(Box::new(Squeak));
+    
+    println!();
+    println!("----- Command Pattern -----");
+    
+    run_client();
 }
