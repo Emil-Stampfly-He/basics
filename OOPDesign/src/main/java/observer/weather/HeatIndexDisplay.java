@@ -2,7 +2,7 @@ package observer.weather;
 
 public class HeatIndexDisplay implements Observer, DisplayElements {
 	float heatIndex = 0.0f;
-	private WeatherData weatherData;
+	private final Subject weatherData;
 
 	public HeatIndexDisplay(WeatherData weatherData) {
 		this.weatherData = weatherData;
@@ -15,8 +15,12 @@ public class HeatIndexDisplay implements Observer, DisplayElements {
 	}
 
 	@Override
-	public void update(float t, float rh, float pressure) {
-		heatIndex = computeHeatIndex(t, rh);
+	public void update() {
+		if (this.weatherData instanceof WeatherData) {
+			this.heatIndex = computeHeatIndex(((WeatherData) this.weatherData).getTemperature(),
+					((WeatherData) this.weatherData).getHumidity());
+		}
+
 		display();
 	}
 	

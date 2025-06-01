@@ -21,8 +21,11 @@ public class StatisticsDisplay implements Observer, DisplayElements {
     }
 
     @Override
-    public void update(float temp, float humidity, float pressure) {
-        this.temperatures.add(temp);
+    public void update() {
+        if (weatherData instanceof WeatherData) {
+            this.temperatures.add(((WeatherData) weatherData).getTemperature());
+        }
+
         display();
     }
 
