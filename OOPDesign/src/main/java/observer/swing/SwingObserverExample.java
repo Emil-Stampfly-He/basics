@@ -13,6 +13,7 @@ public class SwingObserverExample {
     private void go() {
         this.frame = new JFrame();
 
+        // Subject
         JButton button = new JButton("Should I do it?");
 
         // Observer
