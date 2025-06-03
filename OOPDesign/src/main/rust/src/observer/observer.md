@@ -1,6 +1,7 @@
 # 观察者模式
 
 非常简单的一种行为模式。
+
 ![observer_uml](pic/observer_uml.png)
 
 不做过多解释，直接看Java是如何实现的：
