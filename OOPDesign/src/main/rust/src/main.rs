@@ -1,5 +1,6 @@
 mod strategy;
 
+use std::io::{BufReader, Cursor, Read};
 use rust::command::client::run_client;
 use rust::command::enum_match::run_enum_match_pattern;
 use crate::strategy::duck_with_generics::DuckWithGenerics;
@@ -40,4 +41,19 @@ fn main() {
     run_client();
     println!();
     run_enum_match_pattern();
+
+    println!();
+    println!("----- Decorator Pattern -----");
+    
+    let mut buf = [0u8; 10];
+    // BufReader为装饰者
+    let mut input = BufReader::new(Cursor::new("input data"));
+    
+    input.read(&mut buf).ok();
+    print!("Read from a buffered reader: ");
+    
+    for byte in buf {
+        print!("{}", char::from(byte));
+    }
+    println!();
 }
