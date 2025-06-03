@@ -4,7 +4,6 @@
 
 ![observer_uml](pic/observer_uml.png)
 
-不做过多解释，直接看Java是如何实现的：
 ```java
 public interface Subject {
     void registerObserver(Observer o); // 注册订阅者
@@ -27,6 +26,35 @@ public class WeatherData implements Subject {
     public WeatherData() {this.observers = new ArrayList<>();}
 }
 ```
+
+Spring中的`ApplicationEventPublisher`和`ApplicationEventListener`就是典型的观察者机制。还有Swing中的动作绑定：
+```java
+public class SwingObserverExample {
+    JFrame frame;
+
+    public static void main(String[] args) {
+        SwingObserverExample example = new SwingObserverExample();
+        example.go();
+    }
+
+    private void go() {
+        this.frame = new JFrame();
+
+        // Subject
+        JButton button = new JButton("Should I do it?");
+
+        // Observer
+        button.addActionListener(angelEvent -> System.out.println("Don't do it, you might regret it!"));
+        button.addActionListener(evilEvent -> System.out.println("Come on, do it!"));
+
+        this.frame.add(button);
+        this.frame.pack();
+        this.frame.setVisible(true);
+    }
+}
+```
+`addActionListener`方法中的lambda表达式实际上创建了一个订阅者类`ActionListener`并让其订阅`button`。
+
 在Rust中，虽然也可以使用`trait`来实现相似的设计模式，但是生命周期存在很大的问题：订阅者和主题谁应该存活得更久？为了避免这个问题，通常直接使用`std`库或者`tokio`中的`mpsc::channel`或者`broadcast::channel`，这样不仅能够天然地实现订阅机制，还能够确保线程之间的安全性，在高并发条件下也能确保线程安全。
 
 `mpsc::channel`与`broadcast::channel`有一点区别：
