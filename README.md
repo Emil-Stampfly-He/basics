@@ -43,8 +43,10 @@
 * `Xmx`、`Xms`、GC日志解析
 
 ## 四、OOP设计模式：Rust vs Java
-### 1. [策略模式](OOPDesign/src/main/rust/src/strategy/strategy.md)
-### 2. [命令模式](OOPDesign/src/main/rust/src/command/command.md)
+### 1. 行为模式
+* [策略模式](OOPDesign/src/main/rust/src/strategy/strategy.md)
+* [命令模式](OOPDesign/src/main/rust/src/command/command.md)
+* [观察者模式](OOPDesign/src/main/rust/src/observer/observer.md)
 
 ## 五、框架及中间件
 ### 1. Spring Framework
