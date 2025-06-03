@@ -47,6 +47,8 @@
 * [策略模式](OOPDesign/src/main/rust/src/strategy/strategy.md)
 * [命令模式](OOPDesign/src/main/rust/src/command/command.md)
 * [观察者模式](OOPDesign/src/main/rust/src/observer/observer.md)
+### 2. 结构型模式
+* [装饰者模式](OOPDesign/src/main/rust/src/decorator/decorator.md)
 
 ## 五、框架及中间件
 ### 1. Spring Framework
