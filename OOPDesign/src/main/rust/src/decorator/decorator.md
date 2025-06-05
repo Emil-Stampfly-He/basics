@@ -123,6 +123,48 @@ public class InputTest {
 ```
 
 ## 3. Rust中的装饰者模式
+对于`Beverage`这种顶级接口，Rust中可以使用`trait`。然后装饰者（配料）在内部存储一个满足`Beverage`的泛型即可：
+```rust
+// --------------------------------
+// 顶级接口
+// --------------------------------
+#[derive(Clone, Copy)]
+pub enum Size { Tall, Grande, Venti }
+
+pub trait Beverage {
+    fn get_description(&self) -> String;
+    fn set_size(&mut self, size: Size);
+    fn get_size(&self) -> Size;
+    fn cost(&self) -> f64;
+}
+
+// --------------------------------
+// 被装饰者
+// --------------------------------
+pub struct DarkRoast { size: Size, }
+
+impl DarkRoast {
+    pub fn new(size: Size) -> DarkRoast { DarkRoast { size } }
+}
+
+impl Beverage for DarkRoast {
+    fn get_description(&self) -> String { "Dark Roast".to_string() }
+    fn set_size(&mut self, size: Size) { self.size = size; }
+    fn get_size(&self) -> Size { self.size.clone() }
+    fn cost(&self) -> f64 { 0.99 }
+}
+
+// --------------------------------
+// 装饰者：携带一个泛型
+// --------------------------------
+pub struct Mocha<B: Beverage> { beverage: B, }
+
+impl<B: Beverage> Mocha<B> {
+    pub fn new(beverage: B) -> Self { Mocha { beverage } }
+}
+```
+当然也可以使用`Box<dyn Beverage>`，但动态分发不具有泛型的零成本抽象优势。
+
 Rust中关于输入流的组件也是典型的装饰者模式：
 - `Read` trait：顶级`trait`
 - `Cursor`：被装饰对象
@@ -140,6 +182,5 @@ fn main() {
     for byte in buf {
         print!("{}", char::from(byte));
     }
-    println!();
 }
 ```
