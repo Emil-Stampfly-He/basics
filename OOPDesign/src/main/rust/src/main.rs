@@ -3,6 +3,7 @@ mod strategy;
 use std::io::{BufReader, Cursor, Read};
 use rust::command::client::run_client;
 use rust::command::enum_match::run_enum_match_pattern;
+use rust::decorator::beverage::run_starbuzz;
 use crate::strategy::duck_with_generics::DuckWithGenerics;
 use crate::strategy::duck_with_trait::Duck;
 use crate::strategy::fly_behavior::{FlyNoWay, FlyWithRocket, FlyWithWings};
@@ -56,4 +57,6 @@ fn main() {
         print!("{}", char::from(byte));
     }
     println!();
+    
+    run_starbuzz();
 }

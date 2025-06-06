@@ -49,6 +49,8 @@
 * [观察者模式](OOPDesign/src/main/rust/src/observer/observer.md)
 ### 2. 结构型模式
 * [装饰者模式](OOPDesign/src/main/rust/src/decorator/decorator.md)
+### 3. 创建型模式
+* [工厂模式](OOPDesign/src/main/rust/src/factory/factory.md)
 
 ## 五、框架及中间件
 ### 1. Spring Framework
