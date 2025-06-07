@@ -49,6 +49,7 @@
 * [观察者模式](OOPDesign/src/main/rust/src/observer/observer.md)
 ### 2. 结构型模式
 * [装饰者模式](OOPDesign/src/main/rust/src/decorator/decorator.md)
+* [适配器模式与外观模式](OOPDesign/src/main/rust/src/adapter/adapter.md)
 ### 3. 创建型模式
 * [工厂模式](OOPDesign/src/main/rust/src/factory/factory.md)
 * [单例模式](OOPDesign/src/main/rust/src/singleton/singleton.md)
