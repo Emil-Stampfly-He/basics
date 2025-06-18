@@ -47,9 +47,11 @@
 * [策略模式](OOPDesign/src/main/rust/src/strategy/strategy.md)
 * [命令模式](OOPDesign/src/main/rust/src/command/command.md)
 * [观察者模式](OOPDesign/src/main/rust/src/observer/observer.md)
+* [模板方法模式]()
 ### 2. 结构型模式
 * [装饰者模式](OOPDesign/src/main/rust/src/decorator/decorator.md)
-* [适配器模式与外观模式](OOPDesign/src/main/rust/src/adapter/adapter.md)
+* [适配器模式](OOPDesign/src/main/rust/src/adapter/adapter.md)
+* [外观模式](OOPDesign/src/main/rust/src/facade/facade.md)
 ### 3. 创建型模式
 * [工厂模式](OOPDesign/src/main/rust/src/factory/factory.md)
 * [单例模式](OOPDesign/src/main/rust/src/singleton/singleton.md)
