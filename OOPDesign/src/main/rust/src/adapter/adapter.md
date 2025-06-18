@@ -14,7 +14,7 @@ JDK中的集合类有非常多的适配器方法（尽管不是一整个类）�
 - `Collections#list`：接受一个`Enumeration<T>`为参数，将`Enumeration<T>`转换为`ArrayList<T>`
 - `Collections#enumeraion`：接受一个`Collection<T>`为参数，将`Collections<T>`转换为`Enumeration<T>`
 
-可以编写一个简单的将`Enumeration<T>`转换为`Iterator<T>`的类`EnumerationIterator<T>`：
+可以编写一个简单的将`Enumeration<T>`（Adaptee）转换为`Iterator<T>`的类`EnumerationIterator<T>`（Adapter）：
 ```java
 public class EnumerationIterator<E> implements Iterator<E> {
     Enumeration<E> enumeration;

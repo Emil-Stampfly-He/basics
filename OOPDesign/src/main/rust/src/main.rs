@@ -1,6 +1,9 @@
 mod strategy;
 
 use std::io::{BufReader, Cursor, Read};
+use rust::adapter::adaptee::SpecificTarget;
+use rust::adapter::adapter::TargetAdapter;
+use rust::adapter::target::{OrdinaryTarget, Target};
 use rust::command::client::run_client;
 use rust::command::enum_match::run_enum_match_pattern;
 use rust::decorator::beverage::run_starbuzz;
@@ -59,4 +62,22 @@ fn main() {
     println!();
     
     run_starbuzz();
+
+    println!();
+    println!("----- Adapter Pattern -----");
+    
+    let target = OrdinaryTarget;
+    println!("A compatible target can be directly called");
+    call(target);
+    
+    let adaptee = SpecificTarget;
+    println!("Adaptee is incompatible with client: {}", adaptee.specific_request());
+    
+    let adapter = TargetAdapter::new(adaptee);
+    println!("With adapter client can call its method");
+    call(adapter);
+}
+
+fn call(target: impl Target) {
+    println!("'{}'", target.request());
 }
