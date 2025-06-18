@@ -44,7 +44,7 @@ public static void main(String[] args) {
 - 装饰者：不改变接口，但加入责任
 
 ## 3. Rust中的适配器模式
-迭代器`Iterator` trait是Rust标准库中最能体现适配器模式的板块（与Java很像）：
+迭代器`Iterator` trait是Rust标准库中最能体现适配器模式的板块（类似于Java中的Stream API。Java的Stream API也可以被认为是适配器模式）：
 - `map`：接受一个闭包`F`，把原迭代器`I`的每个`Item`映射成另一个值，返回`Map<I, F>`
 - `filter`：接受一个返回`bool`的闭包`F`，只有闭包返回`true`的元素才会被保留，返回`Filter<I, P>`
 - `take`：接受一个`usize`，返回`Take<I>`
